@@ -58,7 +58,7 @@ export default function App() {
         const max = ai ? m.maxQuestionsPerSession : m.totalQuestions;
         setQuestionCount(Math.min(10, max));
       })
-      .catch(() => setError('Cannot reach API. Start the .NET backend on port 5299.'));
+      .catch(() => setError('Cannot reach API. Start the .NET backend on live.'));
   }, []);
 
   const toggleSection = (id: number) => {
@@ -307,7 +307,7 @@ export default function App() {
 
         {screen === 'home' && (
           <section className="card home-card">
-            <h2>Start a practice session</h2>
+            <h2>Start a new practice session</h2>
             <p className="muted">
               Official CCA-F format: multiple choice (1 correct, 3 distractors). Full exam is 60
               questions, <strong>2:00:00</strong>, pass {meta?.passingScore ?? 720}/
