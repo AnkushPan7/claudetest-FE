@@ -1,4 +1,7 @@
-const API = '/api/quiz';
+/** Dev: Vite proxies `/api` to the backend. Prod: call the Render API host (override with VITE_API_BASE_URL). */
+const API =
+  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
+  (import.meta.env.DEV ? '/api/quiz' : 'https://claudetest-be.onrender.com/api/quiz');
 
 export type SectionInfo = { id: number; name: string; range: string };
 export type ExamScenarioInfo = { id: number; name: string; primaryDomains: string[] };
