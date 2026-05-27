@@ -620,11 +620,25 @@ body {
 }
 
 .question-text {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
   font-size: 1.05rem;
   font-weight: 400;
   line-height: 1.65;
   margin: 0 0 1.35rem;
   color: var(--text);
+}
+
+.question-number {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.question-text-body {
+  flex: 1;
+  min-width: 0;
 }
 
 .inline-code {

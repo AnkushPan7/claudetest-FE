@@ -494,7 +494,12 @@ export default function App() {
               <span className="muted">{question.title}</span>
             </div>
             <h2 className="question-text">
-              <FormatText text={question.text} />
+              <span className="question-number" aria-hidden="true">
+                {index + 1}.
+              </span>
+              <span className="question-text-body">
+                <FormatText text={question.text} />
+              </span>
             </h2>
 
             <div className="options" role="radiogroup" aria-label="Answer choices">
@@ -740,7 +745,12 @@ export default function App() {
                       <div className="review-body">
                         <p className="pill">{item.sectionName}</p>
                         <p className="question-text">
-                          <FormatText text={item.text} />
+                          <span className="question-number" aria-hidden="true">
+                            {item.index + 1}.
+                          </span>
+                          <span className="question-text-body">
+                            <FormatText text={item.text} />
+                          </span>
                         </p>
                         <ul className="review-options">
                           {(['A', 'B', 'C', 'D'] as const).map((letter) => {
