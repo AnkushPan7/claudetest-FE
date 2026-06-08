@@ -55,7 +55,7 @@ export default function App() {
         const ai = m.questionSource.toLowerCase() === 'ai';
         setUseAiMode(ai);
         setLearningUrl(m.learningUrl ?? m.learningUrls?.[0] ?? '');
-        const max = ai ? m.maxQuestionsPerSession : m.totalQuestions;
+        const max = ai ? m.maxQuestionsPerSession : m.bankQuestionCount;
         setQuestionCount(Math.min(10, max));
       })
       .catch(() => setError('Cannot reach API. Start the .NET backend on live.'));
@@ -351,7 +351,7 @@ export default function App() {
                         checked={!useAiMode}
                         onChange={() => {
                           setUseAiMode(false);
-                          if (meta) setQuestionCount((c) => Math.min(c, meta.totalQuestions));
+                          if (meta) setQuestionCount((c) => Math.min(c, meta.bankQuestionCount));
                         }}
                       />
                       <span>
@@ -407,7 +407,7 @@ export default function App() {
                   <input
                     type="range"
                     min={5}
-                    max={useAiMode ? meta.maxQuestionsPerSession : meta.totalQuestions}
+                    max={useAiMode ? meta.maxQuestionsPerSession : meta.bankQuestionCount}
                     value={questionCount}
                     onChange={(e) => setQuestionCount(Number(e.target.value))}
                   />
