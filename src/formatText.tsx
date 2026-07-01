@@ -1,7 +1,8 @@
 import { Fragment, ReactNode } from 'react';
 
 /** Renders exam text with backticks and snake_case identifiers as inline code. */
-export function FormatText({ text }: { text: string }) {
+export function FormatText({ text }: { text?: string | null }) {
+  if (!text) return null;
   const parts: ReactNode[] = [];
   const re = /`([^`]+)`|\b([a-z][a-z0-9]*(?:_[a-z0-9]+)+)\b/g;
   let last = 0;

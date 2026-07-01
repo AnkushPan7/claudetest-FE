@@ -92,6 +92,9 @@ export type AnswerSubmit = {
   index: number;
   total: number;
   selectedAnswer: string;
+  correctAnswer: string;
+  isCorrect: boolean;
+  explanation: string;
 };
 
 export type QuestionReviewItem = {

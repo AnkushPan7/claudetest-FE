@@ -12,7 +12,7 @@ export default defineConfig({
     open: true,
     proxy: {
       '/api': {
-        target: 'https://claudetest-be.onrender.com/',
+        target: 'http://localhost:5299',
         changeOrigin: true,
       },
     },

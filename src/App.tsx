@@ -10,6 +10,7 @@ import {
   fetchReview,
   fetchSummary,
   submitAnswer,
+  type AnswerSubmit,
   type ExamMetadata,
   getSessionExamTargets,
   toSessionScaledScore,
@@ -42,6 +43,7 @@ export default function App() {
   const [question, setQuestion] = useState<QuestionDto | null>(null);
   const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
   const [answersByIndex, setAnswersByIndex] = useState<Record<number, string>>({});
+  const [feedbackByIndex, setFeedbackByIndex] = useState<Record<number, AnswerSubmit>>({});
   const [summary, setSummary] = useState<SessionSummary | null>(null);
   const [review, setReview] = useState<QuestionReviewItem[]>([]);
   const [sessionTargets, setSessionTargets] = useState<SessionExamTargets | null>(null);
@@ -56,7 +58,7 @@ export default function App() {
         setUseAiMode(ai);
         setLearningUrl(m.learningUrl ?? m.learningUrls?.[0] ?? '');
         const max = ai ? m.maxQuestionsPerSession : m.bankQuestionCount;
-        setQuestionCount(Math.min(10, max));
+        setQuestionCount(Math.min(meta.totalQuestions, max));
       })
       .catch(() => setError('Cannot reach API. Start the .NET backend on live.'));
   }, []);
@@ -81,6 +83,7 @@ export default function App() {
       setIndex(0);
       setSelectedLetter(null);
       setAnswersByIndex({});
+      setFeedbackByIndex({});
       setReview([]);
       const q = await fetchQuestion(s.sessionId, 0);
       setQuestion(q);
@@ -97,14 +100,21 @@ export default function App() {
   };
 
   const pickAnswer = async (letter: string) => {
-    if (!session || loading) return;
+    if (!session || loading || feedbackByIndex[index]) return;
     setSelectedLetter(letter);
     setAnswersByIndex((prev) => ({ ...prev, [index]: letter }));
     setLoading(true);
     try {
-      await submitAnswer(session.sessionId, index, letter);
+      const result = await submitAnswer(session.sessionId, index, letter);
+      setFeedbackByIndex((prev) => ({ ...prev, [index]: result }));
     } catch {
       setError('Failed to save answer.');
+      setAnswersByIndex((prev) => {
+        const next = { ...prev };
+        delete next[index];
+        return next;
+      });
+      setSelectedLetter(null);
     } finally {
       setLoading(false);
     }
@@ -228,6 +238,7 @@ export default function App() {
     setReview([]);
     setIndex(0);
     setAnswersByIndex({});
+    setFeedbackByIndex({});
     setSessionTargets(null);
     setRemainingSeconds(0);
     timeUpHandled.current = false;
@@ -258,6 +269,8 @@ export default function App() {
   const unansweredCount = Math.max(0, totalQuestions - answeredCount);
   const isLastQuestion = session ? index + 1 >= session.totalQuestions : false;
   const showExamTimer = screen === 'quiz' || screen === 'submit-review';
+  const currentFeedback = feedbackByIndex[index] ?? null;
+  const questionAnswered = currentFeedback != null;
 
   return (
     <div className="app">
@@ -355,8 +368,9 @@ export default function App() {
                         }}
                       />
                       <span>
-                        <strong>Practice question bank</strong> — Source : Real Claude
-                        certification program exam
+                        <strong>Real exam question bank</strong> — {meta.bankQuestionCount}{' '}
+                        scenario-based questions from the Claude certification program (same
+                        format as the live exam)
                       </span>
                     </label>
                     <label className="checkbox source-option">
@@ -491,7 +505,6 @@ export default function App() {
             )}
             <div className="question-meta">
               <span className="pill">{question.sectionName}</span>
-              <span className="muted">{question.title}</span>
             </div>
             <h2 className="question-text">
               <span className="question-number" aria-hidden="true">
@@ -507,15 +520,29 @@ export default function App() {
                 const text = question.options[letter];
                 if (!text) return null;
                 const selected = selectedLetter === letter;
+                const isCorrectOption =
+                  questionAnswered && letter === currentFeedback.correctAnswer;
+                const isWrongSelection =
+                  questionAnswered &&
+                  letter === currentFeedback.selectedAnswer &&
+                  !currentFeedback.isCorrect;
+                const optionClass = [
+                  'option',
+                  selected ? 'selected' : '',
+                  isCorrectOption ? 'correct' : '',
+                  isWrongSelection ? 'wrong' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ');
                 return (
                   <button
                     key={letter}
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    className={`option ${selected ? 'selected' : ''}`}
+                    className={optionClass}
                     onClick={() => pickAnswer(letter)}
-                    disabled={loading}
+                    disabled={loading || questionAnswered}
                   >
                     <span className="option-radio" aria-hidden="true" />
                     <span className="option-letter" aria-hidden="true">
@@ -529,9 +556,43 @@ export default function App() {
               })}
             </div>
 
+            {currentFeedback && (
+              <div
+                className={`question-feedback ${currentFeedback.isCorrect ? 'feedback-ok' : 'feedback-bad'}`}
+              >
+                <p className="question-feedback-status">
+                  {currentFeedback.isCorrect ? (
+                    <strong>Correct</strong>
+                  ) : (
+                    <>
+                      <strong>Incorrect</strong>
+                      {currentFeedback.correctAnswer && (
+                        <span className="muted">
+                          {' '}
+                          — correct answer: {currentFeedback.correctAnswer}
+                        </span>
+                      )}
+                    </>
+                  )}
+                </p>
+                {currentFeedback.explanation ? (
+                  <p className="question-feedback-explanation">
+                    <FormatText text={currentFeedback.explanation} />
+                  </p>
+                ) : (
+                  <p className="question-feedback-explanation muted">
+                    Explanation unavailable — restart the local backend if you recently updated the
+                    API.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="quiz-actions">
               <p className="hint">
-                You can change your answer or revisit earlier questions until you proceed to submit.
+                {questionAnswered
+                  ? 'Review the explanation, then continue to the next question.'
+                  : 'Select an answer to see whether you were right and read the explanation.'}
                 {answeredCount > 0 && (
                   <>
                     {' '}
@@ -801,7 +862,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <span>JSON: 60-question practice bank · AI: generated from learning URL · 5 official domains</span>
+        <span>Real exam bank: 60 scenario questions · AI: generated from learning URL · 5 official domains</span>
         <span>API: .NET 8 · UI: React + Vite</span>
       </footer>
     </div>
