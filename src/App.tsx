@@ -42,6 +42,7 @@ export default function App() {
   const [index, setIndex] = useState(0);
   const [question, setQuestion] = useState<QuestionDto | null>(null);
   const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
+  const [draftAnswersByIndex, setDraftAnswersByIndex] = useState<Record<number, string>>({});
   const [answersByIndex, setAnswersByIndex] = useState<Record<number, string>>({});
   const [feedbackByIndex, setFeedbackByIndex] = useState<Record<number, AnswerSubmit>>({});
   const [summary, setSummary] = useState<SessionSummary | null>(null);
@@ -84,6 +85,7 @@ export default function App() {
       setSession(s);
       setIndex(0);
       setSelectedLetter(null);
+      setDraftAnswersByIndex({});
       setAnswersByIndex({});
       setFeedbackByIndex({});
       setReview([]);
@@ -101,23 +103,27 @@ export default function App() {
     }
   };
 
-  const pickAnswer = async (letter: string) => {
+  const selectAnswer = (letter: string) => {
     if (!session || answerSubmitting || feedbackByIndex[index]) return;
     setSelectedLetter(letter);
-    setAnswersByIndex((prev) => ({ ...prev, [index]: letter }));
+    setDraftAnswersByIndex((prev) => ({ ...prev, [index]: letter }));
+  };
+
+  const submitCurrentAnswer = async () => {
+    if (!session || !selectedLetter || answerSubmitting || feedbackByIndex[index]) return;
     setAnswerSubmitting(true);
     setError(null);
     try {
-      const result = await submitAnswer(session.sessionId, index, letter);
+      const result = await submitAnswer(session.sessionId, index, selectedLetter);
+      setAnswersByIndex((prev) => ({ ...prev, [index]: selectedLetter }));
       setFeedbackByIndex((prev) => ({ ...prev, [index]: result }));
-    } catch {
-      setError('Failed to save answer.');
-      setAnswersByIndex((prev) => {
+      setDraftAnswersByIndex((prev) => {
         const next = { ...prev };
         delete next[index];
         return next;
       });
-      setSelectedLetter(null);
+    } catch {
+      setError('Failed to save answer.');
     } finally {
       setAnswerSubmitting(false);
     }
@@ -130,7 +136,9 @@ export default function App() {
       setError(null);
       try {
         setIndex(targetIndex);
-        setSelectedLetter(answersByIndex[targetIndex] ?? null);
+        setSelectedLetter(
+          answersByIndex[targetIndex] ?? draftAnswersByIndex[targetIndex] ?? null,
+        );
         const q = await fetchQuestion(session.sessionId, targetIndex);
         setQuestion(q);
       } catch {
@@ -139,7 +147,7 @@ export default function App() {
         setLoading(false);
       }
     },
-    [session, answersByIndex],
+    [session, answersByIndex, draftAnswersByIndex],
   );
 
   const goPrevious = () => {
@@ -240,6 +248,7 @@ export default function App() {
     setSummary(null);
     setReview([]);
     setIndex(0);
+    setDraftAnswersByIndex({});
     setAnswersByIndex({});
     setFeedbackByIndex({});
     setSessionTargets(null);
@@ -552,7 +561,7 @@ export default function App() {
                     role="radio"
                     aria-checked={selected}
                     className={optionClass}
-                    onClick={() => pickAnswer(letter)}
+                    onClick={() => selectAnswer(letter)}
                     disabled={loading || answerSubmitting || questionAnswered}
                   >
                     <span className="option-radio" aria-hidden="true" />
@@ -576,6 +585,19 @@ export default function App() {
                 );
               })}
             </div>
+
+            {!questionAnswered && (
+              <div className="quiz-submit-answer">
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() => void submitCurrentAnswer()}
+                  disabled={loading || answerSubmitting || !selectedLetter}
+                >
+                  {answerSubmitting ? 'Checking answer…' : 'Submit answer'}
+                </button>
+              </div>
+            )}
 
             {answerSubmitting && !currentFeedback && (
               <div className="question-feedback feedback-pending" aria-live="polite">
@@ -623,7 +645,7 @@ export default function App() {
               <p className="hint">
                 {questionAnswered
                   ? 'Review the explanation, then continue to the next question.'
-                  : 'Select an answer to see whether you were right and read the explanation.'}
+                  : 'Select an answer, then submit to check whether you were right and read the explanation.'}
                 {answeredCount > 0 && (
                   <>
                     {' '}

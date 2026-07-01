@@ -836,6 +836,12 @@ body {
   line-height: 1.55;
 }
 
+.quiz-submit-answer {
+  margin-top: 1.25rem;
+  display: flex;
+  justify-content: flex-start;
+}
+
 .quiz-actions {
   margin-top: 1.5rem;
   padding-top: 1.25rem;
