@@ -748,11 +748,71 @@ body {
   background: var(--bad-bg);
 }
 
+.option.pending {
+  border-color: var(--border-strong);
+  background: var(--surface2);
+  animation: option-pulse 1s ease-in-out infinite;
+}
+
+@keyframes option-pulse {
+  0%,
+  100% {
+    box-shadow: var(--shadow-md);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(10, 10, 10, 0.12);
+  }
+}
+
+.option-result {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 1rem;
+  border-radius: 50%;
+}
+
+.option-result.ok {
+  color: var(--ok);
+  background: var(--white);
+  border: 2px solid var(--ok-border);
+}
+
+.option-result.bad {
+  color: var(--bad);
+  background: var(--white);
+  border: 2px solid var(--bad-border);
+}
+
 .question-feedback {
   margin-top: 1.25rem;
   padding: 1rem 1.1rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
+}
+
+.question-feedback.feedback-pending {
+  border-color: var(--border-strong);
+  background: var(--surface2);
+}
+
+.question-feedback.reveal {
+  animation: feedback-reveal 0.35s ease-out;
+}
+
+@keyframes feedback-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .question-feedback.feedback-ok {

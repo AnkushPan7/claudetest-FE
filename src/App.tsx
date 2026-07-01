@@ -49,6 +49,8 @@ export default function App() {
   const [sessionTargets, setSessionTargets] = useState<SessionExamTargets | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(0);
   const timeUpHandled = useRef(false);
+  const feedbackRef = useRef<HTMLDivElement>(null);
+  const [answerSubmitting, setAnswerSubmitting] = useState(false);
 
   useEffect(() => {
     fetchMetadata()
@@ -100,10 +102,11 @@ export default function App() {
   };
 
   const pickAnswer = async (letter: string) => {
-    if (!session || loading || feedbackByIndex[index]) return;
+    if (!session || answerSubmitting || feedbackByIndex[index]) return;
     setSelectedLetter(letter);
     setAnswersByIndex((prev) => ({ ...prev, [index]: letter }));
-    setLoading(true);
+    setAnswerSubmitting(true);
+    setError(null);
     try {
       const result = await submitAnswer(session.sessionId, index, letter);
       setFeedbackByIndex((prev) => ({ ...prev, [index]: result }));
@@ -116,7 +119,7 @@ export default function App() {
       });
       setSelectedLetter(null);
     } finally {
-      setLoading(false);
+      setAnswerSubmitting(false);
     }
   };
 
@@ -241,6 +244,7 @@ export default function App() {
     setFeedbackByIndex({});
     setSessionTargets(null);
     setRemainingSeconds(0);
+    setAnswerSubmitting(false);
     timeUpHandled.current = false;
   };
 
@@ -271,6 +275,11 @@ export default function App() {
   const showExamTimer = screen === 'quiz' || screen === 'submit-review';
   const currentFeedback = feedbackByIndex[index] ?? null;
   const questionAnswered = currentFeedback != null;
+
+  useEffect(() => {
+    if (!currentFeedback || !feedbackRef.current) return;
+    feedbackRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [currentFeedback, index]);
 
   return (
     <div className="app">
@@ -520,6 +529,7 @@ export default function App() {
                 const text = question.options[letter];
                 if (!text) return null;
                 const selected = selectedLetter === letter;
+                const isPendingSelection = answerSubmitting && selected && !questionAnswered;
                 const isCorrectOption =
                   questionAnswered && letter === currentFeedback.correctAnswer;
                 const isWrongSelection =
@@ -529,6 +539,7 @@ export default function App() {
                 const optionClass = [
                   'option',
                   selected ? 'selected' : '',
+                  isPendingSelection ? 'pending' : '',
                   isCorrectOption ? 'correct' : '',
                   isWrongSelection ? 'wrong' : '',
                 ]
@@ -542,7 +553,7 @@ export default function App() {
                     aria-checked={selected}
                     className={optionClass}
                     onClick={() => pickAnswer(letter)}
-                    disabled={loading || questionAnswered}
+                    disabled={loading || answerSubmitting || questionAnswered}
                   >
                     <span className="option-radio" aria-hidden="true" />
                     <span className="option-letter" aria-hidden="true">
@@ -551,14 +562,34 @@ export default function App() {
                     <span className="option-text">
                       <FormatText text={text} />
                     </span>
+                    {isCorrectOption && (
+                      <span className="option-result ok" aria-hidden="true">
+                        ✓
+                      </span>
+                    )}
+                    {isWrongSelection && (
+                      <span className="option-result bad" aria-hidden="true">
+                        ✗
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
 
+            {answerSubmitting && !currentFeedback && (
+              <div className="question-feedback feedback-pending" aria-live="polite">
+                <p className="question-feedback-status">
+                  <strong>Checking your answer…</strong>
+                </p>
+              </div>
+            )}
+
             {currentFeedback && (
               <div
-                className={`question-feedback ${currentFeedback.isCorrect ? 'feedback-ok' : 'feedback-bad'}`}
+                ref={feedbackRef}
+                className={`question-feedback reveal ${currentFeedback.isCorrect ? 'feedback-ok' : 'feedback-bad'}`}
+                aria-live="polite"
               >
                 <p className="question-feedback-status">
                   {currentFeedback.isCorrect ? (
@@ -617,7 +648,7 @@ export default function App() {
                     type="button"
                     className="btn primary"
                     onClick={proceedToSubmitReview}
-                    disabled={loading}
+                    disabled={loading || answerSubmitting}
                   >
                     Proceed to Submit Exam
                   </button>
@@ -626,7 +657,7 @@ export default function App() {
                     type="button"
                     className="btn primary"
                     onClick={goNext}
-                    disabled={loading}
+                    disabled={loading || answerSubmitting || !questionAnswered}
                   >
                     Next question
                   </button>
