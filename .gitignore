@@ -2,3 +2,5 @@ node_modules/
 dist/
 obj/
 bin/
+.env
+.env.local

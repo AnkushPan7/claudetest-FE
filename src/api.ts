@@ -1,7 +1,17 @@
 /** Dev: Vite proxies `/api` to the backend. Prod: call the Render API host (override with VITE_API_BASE_URL). */
-const API =
-  import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
-  (import.meta.env.DEV ? '/api/quiz' : 'https://claudetest-be.onrender.com/api/quiz');
+function resolveApiBase(): string {
+  const raw = (
+    import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ||
+    (import.meta.env.DEV ? '/api/quiz' : 'https://claudetest-be.onrender.com/api/quiz')
+  ).replace(/\/$/, '');
+
+  if (raw.endsWith('/api/quiz')) return raw;
+  // Render often sets host-only VITE_API_BASE_URL — append the quiz route prefix.
+  if (raw.startsWith('http')) return `${raw}/api/quiz`;
+  return raw;
+}
+
+const API = resolveApiBase();
 
 export type SectionInfo = { id: number; name: string; range: string };
 export type ExamScenarioInfo = { id: number; name: string; primaryDomains: string[] };
