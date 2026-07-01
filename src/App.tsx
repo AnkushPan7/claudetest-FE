@@ -58,7 +58,7 @@ export default function App() {
         setUseAiMode(ai);
         setLearningUrl(m.learningUrl ?? m.learningUrls?.[0] ?? '');
         const max = ai ? m.maxQuestionsPerSession : m.bankQuestionCount;
-        setQuestionCount(Math.min(meta.totalQuestions, max));
+        setQuestionCount(Math.min(m.totalQuestions, max));
       })
       .catch(() => setError('Cannot reach API. Start the .NET backend on live.'));
   }, []);
