@@ -23,11 +23,16 @@ import {
   getStoredUserEmail,
   setStoredUserEmail,
   clearStoredUserEmail,
+  adminLogin,
+  getStoredAdminSession,
+  clearStoredAdminSession,
+  type AdminSession,
 } from './api';
 import Dashboard from './Dashboard';
+import AdminDashboard from './AdminDashboard';
 import { FormatText } from './formatText';
 
-type Screen = 'welcome' | 'dashboard' | 'home' | 'quiz' | 'submit-review' | 'results';
+type Screen = 'welcome' | 'admin-login' | 'dashboard' | 'admin' | 'home' | 'quiz' | 'submit-review' | 'results';
 
 function formatRemainingTime(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -45,9 +50,12 @@ export default function App() {
 
   const [user, setUser] = useState<UserDto | null>(null);
   const [history, setHistory] = useState<ResultHistoryEntry[]>([]);
+  const [adminSession, setAdminSession] = useState<AdminSession | null>(null);
   const [userLoading, setUserLoading] = useState(true);
   const [welcomeName, setWelcomeName] = useState('');
   const [welcomeEmail, setWelcomeEmail] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
 
   const [questionCount, setQuestionCount] = useState(20);
   const [selectedSections, setSelectedSections] = useState<number[]>([]);
@@ -91,6 +99,14 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const storedAdmin = getStoredAdminSession();
+    if (storedAdmin) {
+      setAdminSession(storedAdmin);
+      setScreen('admin');
+      setUserLoading(false);
+      return;
+    }
+
     const storedEmail = getStoredUserEmail();
     if (!storedEmail) {
       setUserLoading(false);
@@ -131,6 +147,30 @@ export default function App() {
     setWelcomeEmail('');
     setScreen('welcome');
     setError(null);
+  };
+
+  const logoutAdmin = () => {
+    clearStoredAdminSession();
+    setAdminSession(null);
+    setAdminEmail('');
+    setAdminPassword('');
+    setScreen('welcome');
+    setError(null);
+  };
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const session = await adminLogin(adminEmail, adminPassword);
+      setAdminSession(session);
+      setScreen('admin');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Admin login failed.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const toggleSection = (id: number) => {
@@ -373,7 +413,9 @@ export default function App() {
   const unansweredCount = Math.max(0, totalQuestions - answeredCount);
   const isLastQuestion = session ? index + 1 >= session.totalQuestions : false;
   const showAppNav =
-    user && (screen === 'dashboard' || screen === 'home' || screen === 'results');
+    user &&
+    !adminSession &&
+    (screen === 'dashboard' || screen === 'home' || screen === 'results');
   const showExamTimer = screen === 'quiz' || screen === 'submit-review';
   const currentFeedback = feedbackByIndex[index] ?? null;
   const questionAnswered = currentFeedback != null;
@@ -412,7 +454,16 @@ export default function App() {
               </button>
             </nav>
           )}
-          {user && screen !== 'welcome' && (
+          {adminSession && screen === 'admin' && (
+            <div className="user-chip">
+              <span className="user-chip-name">Admin</span>
+              <span className="user-chip-email muted">{adminSession.email}</span>
+              <button type="button" className="btn-link" onClick={logoutAdmin}>
+                Log out
+              </button>
+            </div>
+          )}
+          {user && screen !== 'welcome' && screen !== 'admin-login' && !adminSession && (
             <div className="user-chip">
               <span className="user-chip-name">{user.name}</span>
               <span className="user-chip-email muted">{user.email}</span>
@@ -503,6 +554,72 @@ export default function App() {
                 {loading ? 'Saving…' : 'Continue'}
               </button>
             </form>
+            <p className="muted welcome-admin-link">
+              <button
+                type="button"
+                className="btn-link"
+                onClick={() => {
+                  setError(null);
+                  setScreen('admin-login');
+                }}
+              >
+                Admin login
+              </button>
+            </p>
+          </section>
+        )}
+
+        {screen === 'admin-login' && (
+          <section className="card welcome-card">
+            <h2>Admin login</h2>
+            <p className="muted">
+              Sign in with your admin email and password to view team scores and user activity.
+            </p>
+            <form className="welcome-form" onSubmit={(e) => void handleAdminLogin(e)}>
+              <label className="field">
+                <span>Admin email</span>
+                <input
+                  type="email"
+                  className="text-input"
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="admin@example.com"
+                  required
+                  autoComplete="username"
+                />
+              </label>
+              <label className="field">
+                <span>Password</span>
+                <input
+                  type="password"
+                  className="text-input"
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                  autoComplete="current-password"
+                />
+              </label>
+              <button
+                type="submit"
+                className="btn primary"
+                disabled={loading || !adminEmail.trim() || !adminPassword}
+              >
+                {loading ? 'Signing in…' : 'Sign in'}
+              </button>
+            </form>
+            <p className="muted welcome-admin-link">
+              <button
+                type="button"
+                className="btn-link"
+                onClick={() => {
+                  setError(null);
+                  setScreen('welcome');
+                }}
+              >
+                Back to user login
+              </button>
+            </p>
           </section>
         )}
 
@@ -514,6 +631,10 @@ export default function App() {
             meta={meta}
             onStartPractice={() => setScreen('home')}
           />
+        )}
+
+        {screen === 'admin' && adminSession && (
+          <AdminDashboard adminSession={adminSession} meta={meta} />
         )}
 
         {screen === 'home' && (

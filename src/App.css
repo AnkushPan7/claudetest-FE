@@ -421,6 +421,11 @@ body {
   margin-top: 1rem;
 }
 
+.welcome-admin-link {
+  margin-top: 1.25rem;
+  text-align: center;
+}
+
 .welcome-back {
   margin-bottom: 0.5rem;
 }
