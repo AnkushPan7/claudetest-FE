@@ -1,0 +1,142 @@
+import type { QuestionReviewItem } from './api';
+import { FormatText } from './formatText';
+import './ResultDetailView.css';
+
+type ResultDetailViewProps = {
+  dateLabel: string;
+  sourceLabel: string;
+  scoreLabel: string;
+  questions: QuestionReviewItem[];
+  onClose: () => void;
+};
+
+export default function ResultDetailView({
+  dateLabel,
+  sourceLabel,
+  scoreLabel,
+  questions,
+  onClose,
+}: ResultDetailViewProps) {
+  return (
+    <section className="result-detail-panel card">
+      <div className="result-detail-header">
+        <div>
+          <h3>Question-by-question review</h3>
+          <p className="hint">
+            {dateLabel} · {sourceLabel} · Score {scoreLabel}
+          </p>
+        </div>
+        <button type="button" className="btn secondary result-detail-close" onClick={onClose}>
+          Close
+        </button>
+      </div>
+
+      {questions.length === 0 ? (
+        <p className="muted result-detail-empty">
+          Detailed review is not available for this session. Complete a new exam to save
+          question-level history.
+        </p>
+      ) : (
+        <div className="result-detail-list">
+          {questions.map((item) => {
+            const statusClass = !item.answered
+              ? 'unanswered'
+              : item.isCorrect
+                ? 'ok'
+                : 'bad';
+            const statusLabel = !item.answered
+              ? 'Unanswered'
+              : item.isCorrect
+                ? 'Correct'
+                : 'Incorrect';
+            const itemClass = !item.answered
+              ? 'review-unanswered'
+              : item.isCorrect
+                ? 'review-ok'
+                : 'review-bad';
+
+            return (
+              <details key={item.index} className={`review-item result-detail-item ${itemClass}`} open>
+                <summary>
+                  <span className="review-qnum">Q{item.index + 1}</span>
+                  <span className="review-title">{item.title}</span>
+                  <span className={`review-badge ${statusClass}`}>{statusLabel}</span>
+                </summary>
+                <div className="review-body">
+                  <p className="pill">{item.sectionName}</p>
+                  <p className="question-text">
+                    <span className="question-number" aria-hidden="true">
+                      {item.index + 1}.
+                    </span>
+                    <span className="question-text-body">
+                      <FormatText text={item.text} />
+                    </span>
+                  </p>
+
+                  <div className="result-detail-answers">
+                    {item.selectedAnswer ? (
+                      <p className="result-detail-your-answer">
+                        <strong>Your answer:</strong>{' '}
+                        <span className={item.isCorrect ? 'answer-ok' : 'answer-bad'}>
+                          {item.selectedAnswer}
+                        </span>
+                        {!item.isCorrect && (
+                          <span className="muted">
+                            {' '}
+                            · Correct: <strong>{item.correctAnswer}</strong>
+                          </span>
+                        )}
+                      </p>
+                    ) : (
+                      <p className="result-detail-your-answer muted">
+                        <strong>Your answer:</strong> Not answered · Correct:{' '}
+                        <strong>{item.correctAnswer}</strong>
+                      </p>
+                    )}
+                  </div>
+
+                  <ul className="review-options">
+                    {(['A', 'B', 'C', 'D'] as const).map((letter) => {
+                      const optText = item.options[letter];
+                      if (!optText) return null;
+                      const isSelected = item.selectedAnswer === letter;
+                      const isCorrect = item.correctAnswer === letter;
+                      const state = isCorrect
+                        ? 'correct'
+                        : isSelected && !item.isCorrect
+                          ? 'wrong'
+                          : isSelected
+                            ? 'selected'
+                            : '';
+                      return (
+                        <li key={letter} className={`review-option ${state}`}>
+                          <span className="option-radio" aria-hidden="true" />
+                          <span className="option-letter" aria-hidden="true">
+                            {letter}
+                          </span>
+                          <span className="option-text">
+                            <FormatText text={optText} />
+                          </span>
+                          {isSelected && (
+                            <span className="option-you-picked" aria-label="Your selection">
+                              You
+                            </span>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  <p className="review-explanation">
+                    <strong>Explanation:</strong>{' '}
+                    <FormatText text={item.explanation} />
+                  </p>
+                </div>
+              </details>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}

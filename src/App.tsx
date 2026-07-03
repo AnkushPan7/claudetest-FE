@@ -15,10 +15,19 @@ import {
   getSessionExamTargets,
   toSessionScaledScore,
   type SessionExamTargets,
+  type UserDto,
+  type ResultHistoryEntry,
+  registerUser,
+  fetchUserHistory,
+  saveUserResult,
+  getStoredUserEmail,
+  setStoredUserEmail,
+  clearStoredUserEmail,
 } from './api';
+import Dashboard from './Dashboard';
 import { FormatText } from './formatText';
 
-type Screen = 'home' | 'quiz' | 'submit-review' | 'results';
+type Screen = 'welcome' | 'dashboard' | 'home' | 'quiz' | 'submit-review' | 'results';
 
 function formatRemainingTime(totalSeconds: number): string {
   const hours = Math.floor(totalSeconds / 3600);
@@ -27,11 +36,18 @@ function formatRemainingTime(totalSeconds: number): string {
   return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
+
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('home');
+  const [screen, setScreen] = useState<Screen>('welcome');
   const [meta, setMeta] = useState<ExamMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [user, setUser] = useState<UserDto | null>(null);
+  const [history, setHistory] = useState<ResultHistoryEntry[]>([]);
+  const [userLoading, setUserLoading] = useState(true);
+  const [welcomeName, setWelcomeName] = useState('');
+  const [welcomeEmail, setWelcomeEmail] = useState('');
 
   const [questionCount, setQuestionCount] = useState(20);
   const [selectedSections, setSelectedSections] = useState<number[]>([]);
@@ -65,6 +81,57 @@ export default function App() {
       })
       .catch(() => setError('Cannot reach API. Start the .NET backend on live.'));
   }, []);
+
+  const loadUserHistory = useCallback(async (email: string) => {
+    const data = await fetchUserHistory(email);
+    setUser(data.user);
+    setHistory(data.results);
+    setStoredUserEmail(data.user.email);
+    return data;
+  }, []);
+
+  useEffect(() => {
+    const storedEmail = getStoredUserEmail();
+    if (!storedEmail) {
+      setUserLoading(false);
+      setScreen('welcome');
+      return;
+    }
+
+    loadUserHistory(storedEmail)
+      .then(() => setScreen('dashboard'))
+      .catch(() => {
+        clearStoredUserEmail();
+        setScreen('welcome');
+      })
+      .finally(() => setUserLoading(false));
+  }, [loadUserHistory]);
+
+  const handleWelcomeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    try {
+      const registered = await registerUser(welcomeEmail, welcomeName);
+      setStoredUserEmail(registered.email);
+      await loadUserHistory(registered.email);
+      setScreen('dashboard');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save your profile.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const switchUser = () => {
+    clearStoredUserEmail();
+    setUser(null);
+    setHistory([]);
+    setWelcomeName('');
+    setWelcomeEmail('');
+    setScreen('welcome');
+    setError(null);
+  };
 
   const toggleSection = (id: number) => {
     setSelectedSections((prev) =>
@@ -177,13 +244,37 @@ export default function App() {
       }
       setSummary(sum);
       setReview(sortedReview);
+
+      if (user && meta) {
+        const targets = getSessionExamTargets(sum.total, meta);
+        const scaled =
+          sum.answered > 0 && sum.percentCorrect > 0
+            ? toSessionScaledScore(sum.percentCorrect, targets)
+            : null;
+        try {
+          const entry = await saveUserResult(user.email, {
+            sessionId: sum.sessionId,
+            total: sum.total,
+            answered: sum.answered,
+            correct: sum.correct,
+            percentCorrect: sum.percentCorrect,
+            sourceMode: session.sourceMode,
+            scaledScore: scaled,
+            questions: sortedReview,
+          });
+          setHistory((prev) => [entry, ...prev]);
+        } catch {
+          setError('Results loaded, but saving to your history failed.');
+        }
+      }
+
       setScreen('results');
     } catch {
       setError('Failed to load results.');
     } finally {
       setLoading(false);
     }
-  }, [session]);
+  }, [session, user, meta]);
 
   const proceedToSubmitReview = useCallback(() => {
     if (!session) return;
@@ -242,7 +333,7 @@ export default function App() {
   }, [remainingSeconds, screen, session]);
 
   const restart = () => {
-    setScreen('home');
+    setScreen('dashboard');
     setSession(null);
     setQuestion(null);
     setSummary(null);
@@ -281,6 +372,8 @@ export default function App() {
   const totalQuestions = session?.totalQuestions ?? 0;
   const unansweredCount = Math.max(0, totalQuestions - answeredCount);
   const isLastQuestion = session ? index + 1 >= session.totalQuestions : false;
+  const showAppNav =
+    user && (screen === 'dashboard' || screen === 'home' || screen === 'results');
   const showExamTimer = screen === 'quiz' || screen === 'submit-review';
   const currentFeedback = feedbackByIndex[index] ?? null;
   const questionAnswered = currentFeedback != null;
@@ -301,6 +394,33 @@ export default function App() {
           </div>
         </div>
         <div className="header-end">
+          {showAppNav && (
+            <nav className="app-nav" aria-label="Main navigation">
+              <button
+                type="button"
+                className={`app-nav-btn ${screen === 'dashboard' || screen === 'results' ? 'active' : ''}`}
+                onClick={() => setScreen('dashboard')}
+              >
+                Dashboard
+              </button>
+              <button
+                type="button"
+                className={`app-nav-btn ${screen === 'home' ? 'active' : ''}`}
+                onClick={() => setScreen('home')}
+              >
+                Practice
+              </button>
+            </nav>
+          )}
+          {user && screen !== 'welcome' && (
+            <div className="user-chip">
+              <span className="user-chip-name">{user.name}</span>
+              <span className="user-chip-email muted">{user.email}</span>
+              <button type="button" className="btn-link" onClick={switchUser}>
+                Switch user
+              </button>
+            </div>
+          )}
           {showExamTimer && session && sessionTargets && (
             <div className="header-stats">
               <span
@@ -336,9 +456,75 @@ export default function App() {
       <main className="main">
         {error && <div className="banner error">{error}</div>}
 
+        {userLoading && screen === 'welcome' && (
+          <section className="card welcome-card">
+            <p className="muted">Loading…</p>
+          </section>
+        )}
+
+        {!userLoading && screen === 'welcome' && (
+          <section className="card welcome-card">
+            <h2>Welcome</h2>
+            <p className="muted">
+              Enter your name and email to start practicing. Your exam results will be saved so you
+              can review your history anytime.
+            </p>
+            <form className="welcome-form" onSubmit={(e) => void handleWelcomeSubmit(e)}>
+              <label className="field">
+                <span>Your name</span>
+                <input
+                  type="text"
+                  className="text-input"
+                  value={welcomeName}
+                  onChange={(e) => setWelcomeName(e.target.value)}
+                  placeholder="e.g. Priya Sharma"
+                  required
+                  minLength={2}
+                  autoComplete="name"
+                />
+              </label>
+              <label className="field">
+                <span>Email address</span>
+                <input
+                  type="email"
+                  className="text-input"
+                  value={welcomeEmail}
+                  onChange={(e) => setWelcomeEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  autoComplete="email"
+                />
+              </label>
+              <button
+                type="submit"
+                className="btn primary"
+                disabled={loading || welcomeName.trim().length < 2 || !welcomeEmail.trim()}
+              >
+                {loading ? 'Saving…' : 'Continue'}
+              </button>
+            </form>
+          </section>
+        )}
+
+        {screen === 'dashboard' && user && (
+          <Dashboard
+            userName={user.name}
+            userEmail={user.email}
+            history={history}
+            meta={meta}
+            onStartPractice={() => setScreen('home')}
+          />
+        )}
+
         {screen === 'home' && (
           <section className="card home-card">
             <h2>Start a new practice session</h2>
+            {user && (
+              <p className="muted welcome-back">
+                Welcome back, <strong>{user.name}</strong>.
+              </p>
+            )}
+
             <p className="muted">
               Official CCA-F format: multiple choice (1 correct, 3 distractors). Full exam is 60
               questions, <strong>2:00:00</strong>, pass {meta?.passingScore ?? 720}/
@@ -906,6 +1092,9 @@ export default function App() {
             )}
 
             <div className="results-actions">
+              <button className="btn secondary" onClick={() => setScreen('dashboard')}>
+                View dashboard
+              </button>
               <button className="btn primary" onClick={restart}>
                 New practice session
               </button>

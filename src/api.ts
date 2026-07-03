@@ -193,3 +193,115 @@ export async function fetchSummary(sessionId: string): Promise<SessionSummary> {
   if (!res.ok) throw new Error('Failed to load summary');
   return res.json();
 }
+
+export type UserDto = {
+  email: string;
+  name: string;
+  createdAt: string;
+};
+
+export type ResultHistoryEntry = {
+  id: string;
+  sessionId: string;
+  completedAt: string;
+  total: number;
+  answered: number;
+  correct: number;
+  percentCorrect: number;
+  sourceMode: string;
+  scaledScore: number | null;
+  hasDetail: boolean;
+};
+
+export type ResultDetail = {
+  summary: ResultHistoryEntry;
+  questions: QuestionReviewItem[];
+};
+
+export type UserHistory = {
+  user: UserDto;
+  results: ResultHistoryEntry[];
+};
+
+const USER_EMAIL_KEY = 'cca_user_email';
+
+export function getStoredUserEmail(): string | null {
+  try {
+    return localStorage.getItem(USER_EMAIL_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredUserEmail(email: string): void {
+  try {
+    localStorage.setItem(USER_EMAIL_KEY, email);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearStoredUserEmail(): void {
+  try {
+    localStorage.removeItem(USER_EMAIL_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function registerUser(email: string, name: string): Promise<UserDto> {
+  const res = await fetch(`${API}/users/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim(), name: name.trim() }),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '');
+    throw new Error(msg || 'Failed to register user');
+  }
+  return res.json();
+}
+
+export async function fetchUserHistory(email: string): Promise<UserHistory> {
+  const encoded = encodeURIComponent(email.trim().toLowerCase());
+  const res = await fetch(`${API}/users/${encoded}/history`);
+  if (!res.ok) throw new Error('Failed to load history');
+  return res.json();
+}
+
+export async function saveUserResult(
+  email: string,
+  payload: {
+    sessionId: string;
+    total: number;
+    answered: number;
+    correct: number;
+    percentCorrect: number;
+    sourceMode: string;
+    scaledScore: number | null;
+    questions?: QuestionReviewItem[];
+  },
+): Promise<ResultHistoryEntry> {
+  const encoded = encodeURIComponent(email.trim().toLowerCase());
+  const res = await fetch(`${API}/users/${encoded}/results`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '');
+    throw new Error(msg || 'Failed to save result');
+  }
+  return res.json();
+}
+
+export async function fetchResultDetail(
+  email: string,
+  resultId: string,
+): Promise<ResultDetail> {
+  const encodedEmail = encodeURIComponent(email.trim().toLowerCase());
+  const encodedId = encodeURIComponent(resultId);
+  const res = await fetch(`${API}/users/${encodedEmail}/results/${encodedId}`);
+  if (!res.ok) throw new Error('Failed to load result details');
+  return res.json();
+}
