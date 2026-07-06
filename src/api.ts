@@ -305,3 +305,104 @@ export async function fetchResultDetail(
   if (!res.ok) throw new Error('Failed to load result details');
   return res.json();
 }
+
+function resolveApiRoot(): string {
+  return resolveApiBase().replace(/\/api\/quiz\/?$/, '');
+}
+
+const ADMIN_API = `${resolveApiRoot()}/api/admin`;
+const ADMIN_TOKEN_KEY = 'cca_admin_token';
+
+export type AdminLoginResponse = {
+  token: string;
+  expiresAt: string;
+};
+
+export type AdminUserSummary = {
+  email: string;
+  name: string;
+  createdAt: string;
+  resultCount: number;
+};
+
+export type AdminResultSummary = {
+  id: string;
+  userEmail: string;
+  userName: string;
+  sessionId: string;
+  completedAt: string;
+  total: number;
+  answered: number;
+  correct: number;
+  percentCorrect: number;
+  sourceMode: string;
+  scaledScore: number | null;
+  hasDetail: boolean;
+};
+
+export function getAdminToken(): string | null {
+  try {
+    return sessionStorage.getItem(ADMIN_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setAdminToken(token: string): void {
+  try {
+    sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearAdminToken(): void {
+  try {
+    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function adminHeaders(): HeadersInit {
+  const token = getAdminToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+export async function adminLogin(email: string, password: string): Promise<AdminLoginResponse> {
+  const res = await fetch(`${ADMIN_API}/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim(), password }),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '');
+    throw new Error(msg || 'Invalid admin credentials');
+  }
+  return res.json();
+}
+
+export async function adminFetchUsers(): Promise<AdminUserSummary[]> {
+  const res = await fetch(`${ADMIN_API}/users`, { headers: adminHeaders() });
+  if (res.status === 401) throw new Error('Session expired. Please sign in again.');
+  if (!res.ok) throw new Error('Failed to load users');
+  return res.json();
+}
+
+export async function adminFetchResults(): Promise<AdminResultSummary[]> {
+  const res = await fetch(`${ADMIN_API}/results`, { headers: adminHeaders() });
+  if (res.status === 401) throw new Error('Session expired. Please sign in again.');
+  if (!res.ok) throw new Error('Failed to load exam results');
+  return res.json();
+}
+
+export async function adminFetchResultDetail(resultId: string): Promise<ResultDetail> {
+  const encodedId = encodeURIComponent(resultId);
+  const res = await fetch(`${ADMIN_API}/results/${encodedId}`, { headers: adminHeaders() });
+  if (res.status === 401) throw new Error('Session expired. Please sign in again.');
+  if (!res.ok) throw new Error('Failed to load result details');
+  return res.json();
+}

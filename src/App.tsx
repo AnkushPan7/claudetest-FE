@@ -503,6 +503,9 @@ export default function App() {
                 {loading ? 'Saving…' : 'Continue'}
               </button>
             </form>
+            <p className="welcome-admin-link">
+              <a href="/admin">Admin sign in</a>
+            </p>
           </section>
         )}
 
