@@ -13,7 +13,21 @@ function resolveApiBase(): string {
 
 const API = resolveApiBase();
 
-export type SectionInfo = { id: number; name: string; range: string };
+export type SectionInfo = { id: number; name: string; range: string; questionCount?: number };
+
+/** How many bank questions can be drawn for the current domain filter (Json mode). */
+export function getAvailableQuestionCount(
+  meta: ExamMetadata,
+  selectedDomainIds: number[],
+  useAiMode: boolean,
+): number {
+  if (useAiMode) return meta.maxQuestionsPerSession;
+  if (selectedDomainIds.length === 0) return meta.bankQuestionCount;
+  return selectedDomainIds.reduce(
+    (sum, id) => sum + (meta.sections.find((s) => s.id === id)?.questionCount ?? 0),
+    0,
+  );
+}
 export type ExamScenarioInfo = { id: number; name: string; primaryDomains: string[] };
 export type ExamMetadata = {
   examTitle: string;

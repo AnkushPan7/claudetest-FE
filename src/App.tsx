@@ -12,6 +12,7 @@ import {
   submitAnswer,
   type AnswerSubmit,
   type ExamMetadata,
+  getAvailableQuestionCount,
   getSessionExamTargets,
   toSessionScaledScore,
   type SessionExamTargets,
@@ -81,6 +82,21 @@ export default function App() {
       })
       .catch(() => setError('Cannot reach API. Start the .NET backend on live.'));
   }, []);
+
+  const availableQuestionCount =
+    meta ? getAvailableQuestionCount(meta, selectedSections, useAiMode) : 0;
+  const sliderMin = availableQuestionCount > 0 ? Math.min(5, availableQuestionCount) : 5;
+  const sliderMax = useAiMode
+    ? meta?.maxQuestionsPerSession ?? 60
+    : availableQuestionCount;
+
+  useEffect(() => {
+    if (!meta) return;
+    const max = getAvailableQuestionCount(meta, selectedSections, useAiMode);
+    if (max <= 0) return;
+    const min = Math.min(5, max);
+    setQuestionCount((prev) => Math.max(min, Math.min(prev, max)));
+  }, [meta, selectedSections, useAiMode]);
 
   const loadUserHistory = useCallback(async (email: string) => {
     const data = await fetchUserHistory(email);
@@ -163,8 +179,8 @@ export default function App() {
       setRemainingSeconds(targets.timeLimitSeconds);
       timeUpHandled.current = false;
       setScreen('quiz');
-    } catch {
-      setError('Failed to start session.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start session.');
     } finally {
       setLoading(false);
     }
@@ -349,7 +365,9 @@ export default function App() {
   };
 
   const previewTargets =
-    meta && screen === 'home' ? getSessionExamTargets(questionCount, meta) : null;
+    meta && screen === 'home'
+      ? getSessionExamTargets(Math.min(questionCount, sliderMax), meta)
+      : null;
 
   const resultsTargets =
     sessionTargets ??
@@ -627,12 +645,20 @@ export default function App() {
                   </span>
                   <input
                     type="range"
-                    min={5}
-                    max={useAiMode ? meta.maxQuestionsPerSession : meta.bankQuestionCount}
-                    value={questionCount}
+                    min={sliderMin}
+                    max={sliderMax}
+                    value={Math.min(questionCount, sliderMax)}
+                    disabled={!useAiMode && availableQuestionCount === 0}
                     onChange={(e) => setQuestionCount(Number(e.target.value))}
                   />
-                  <strong className="mono">{questionCount}</strong>
+                  <strong className="mono">{Math.min(questionCount, sliderMax)}</strong>
+                  {!useAiMode && selectedSections.length > 0 && (
+                    <span className="hint">
+                      {' '}
+                      (max {availableQuestionCount} for selected domain
+                      {selectedSections.length === 1 ? '' : 's'})
+                    </span>
+                  )}
                 </label>
 
                 {previewTargets && (
@@ -659,7 +685,13 @@ export default function App() {
                         />
                         <span>
                           <strong>{s.name}</strong>{' '}
-                          <em className="muted">({s.range})</em>
+                          <em className="muted">
+                            ({s.range}
+                            {!useAiMode && s.questionCount !== undefined
+                              ? ` · ${s.questionCount} in bank`
+                              : ''}
+                            )
+                          </em>
                         </span>
                       </label>
                     ))}
@@ -667,7 +699,11 @@ export default function App() {
                   <p className="hint">
                     {useAiMode
                       ? 'Optional topic focus for AI generation.'
-                      : 'Leave all unchecked to pull from the full question bank.'}
+                      : selectedSections.length > 0
+                        ? availableQuestionCount === 0
+                          ? 'No questions in the bank for the selected domain(s). Clear the filter or choose other domains.'
+                          : `Leave all unchecked to pull from the full bank (${meta.bankQuestionCount} questions).`
+                        : 'Leave all unchecked to pull from the full question bank.'}
                   </p>
                 </fieldset>
 
@@ -677,7 +713,8 @@ export default function App() {
                   disabled={
                     loading ||
                     !meta ||
-                    (useAiMode && !meta.aiGenerationAvailable)
+                    (useAiMode && !meta.aiGenerationAvailable) ||
+                    (!useAiMode && availableQuestionCount === 0)
                   }
                 >
                   {loading
