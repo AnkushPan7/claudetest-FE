@@ -13,6 +13,7 @@ import {
   type AnswerSubmit,
   type ExamMetadata,
   getAvailableQuestionCount,
+  getSelectedBank,
   getSessionExamTargets,
   toSessionScaledScore,
   type SessionExamTargets,
@@ -53,6 +54,7 @@ export default function App() {
   const [questionCount, setQuestionCount] = useState(20);
   const [selectedSections, setSelectedSections] = useState<number[]>([]);
   const [useAiMode, setUseAiMode] = useState(false);
+  const [selectedBankId, setSelectedBankId] = useState('ankush-yagnesh');
   const [learningUrl, setLearningUrl] = useState('');
 
   const [session, setSession] = useState<SessionDto | null>(null);
@@ -76,27 +78,32 @@ export default function App() {
         setMeta(m);
         const ai = m.questionSource.toLowerCase() === 'ai';
         setUseAiMode(ai);
+        setSelectedBankId(m.defaultBankId ?? 'ankush-yagnesh');
         setLearningUrl(m.learningUrl ?? m.learningUrls?.[0] ?? '');
-        const max = ai ? m.maxQuestionsPerSession : m.bankQuestionCount;
+        const bank = getSelectedBank(m, m.defaultBankId ?? 'ankush-yagnesh');
+        const max = ai ? m.maxQuestionsPerSession : bank.questionCount;
         setQuestionCount(Math.min(m.totalQuestions, max));
       })
       .catch(() => setError('Cannot reach API. Start the .NET backend on live.'));
   }, []);
 
+  const selectedBank = meta ? getSelectedBank(meta, selectedBankId) : null;
+
   const availableQuestionCount =
-    meta ? getAvailableQuestionCount(meta, selectedSections, useAiMode) : 0;
+    meta ? getAvailableQuestionCount(meta, selectedSections, useAiMode, selectedBankId) : 0;
   const sliderMin = availableQuestionCount > 0 ? Math.min(5, availableQuestionCount) : 5;
   const sliderMax = useAiMode
     ? meta?.maxQuestionsPerSession ?? 60
     : availableQuestionCount;
+  const bankSections = useAiMode ? meta?.sections ?? [] : selectedBank?.sections ?? meta?.sections ?? [];
 
   useEffect(() => {
     if (!meta) return;
-    const max = getAvailableQuestionCount(meta, selectedSections, useAiMode);
+    const max = getAvailableQuestionCount(meta, selectedSections, useAiMode, selectedBankId);
     if (max <= 0) return;
     const min = Math.min(5, max);
     setQuestionCount((prev) => Math.max(min, Math.min(prev, max)));
-  }, [meta, selectedSections, useAiMode]);
+  }, [meta, selectedSections, useAiMode, selectedBankId]);
 
   const loadUserHistory = useCallback(async (email: string) => {
     const data = await fetchUserHistory(email);
@@ -164,6 +171,8 @@ export default function App() {
         questionCount,
         selectedSections.length ? selectedSections : undefined,
         useAiMode ? 'Ai' : 'Json',
+        undefined,
+        useAiMode ? undefined : selectedBankId,
       );
       setSession(s);
       setIndex(0);
@@ -589,11 +598,15 @@ export default function App() {
                         checked={!useAiMode}
                         onChange={() => {
                           setUseAiMode(false);
-                          if (meta) setQuestionCount((c) => Math.min(c, meta.bankQuestionCount));
+                          if (meta) {
+                            const bank = getSelectedBank(meta, selectedBankId);
+                            setQuestionCount((c) => Math.min(c, bank.questionCount));
+                          }
                         }}
                       />
                       <span>
-                        <strong>Real exam question bank</strong> — {meta.bankQuestionCount}{' '}
+                        <strong>Real exam question bank</strong> —{' '}
+                        {selectedBank?.questionCount ?? meta.bankQuestionCount}{' '}
                         scenario-based questions from the Claude certification program (same
                         format as the live exam)
                       </span>
@@ -623,6 +636,30 @@ export default function App() {
                     </label>
                   </div>
                 </fieldset>
+
+                {!useAiMode && meta.questionBanks && meta.questionBanks.length > 0 && (
+                  <label className="field bank-select-field">
+                    <span>Question bank</span>
+                    <select
+                      className="bank-select"
+                      value={selectedBankId}
+                      onChange={(e) => {
+                        const nextBankId = e.target.value;
+                        setSelectedBankId(nextBankId);
+                        if (meta) {
+                          const bank = getSelectedBank(meta, nextBankId);
+                          setQuestionCount((c) => Math.min(c, bank.questionCount));
+                        }
+                      }}
+                    >
+                      {meta.questionBanks.map((bank) => (
+                        <option key={bank.id} value={bank.id}>
+                          {bank.name} ({bank.questionCount} questions)
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
 
                 {meta.aiGenerationAvailable && (
                   <label className="field learning-url-field">
@@ -676,7 +713,10 @@ export default function App() {
                 <fieldset className="sections domain-mode">
                   <legend>Filter by exam domain (optional)</legend>
                   <div className="domain-options">
-                    {meta.sections.map((s) => (
+                    {meta.sections.map((s) => {
+                      const bankSection = bankSections.find((b) => b.id === s.id);
+                      const inBankCount = bankSection?.questionCount;
+                      return (
                       <label key={s.id} className="checkbox domain-option">
                         <input
                           type="checkbox"
@@ -687,14 +727,15 @@ export default function App() {
                           <strong>{s.name}</strong>{' '}
                           <em className="muted">
                             ({s.range}
-                            {!useAiMode && s.questionCount !== undefined
-                              ? ` · ${s.questionCount} in bank`
+                            {!useAiMode && inBankCount !== undefined
+                              ? ` · ${inBankCount} in bank`
                               : ''}
                             )
                           </em>
                         </span>
                       </label>
-                    ))}
+                      );
+                    })}
                   </div>
                   <p className="hint">
                     {useAiMode
@@ -702,7 +743,7 @@ export default function App() {
                       : selectedSections.length > 0
                         ? availableQuestionCount === 0
                           ? 'No questions in the bank for the selected domain(s). Clear the filter or choose other domains.'
-                          : `Leave all unchecked to pull from the full bank (${meta.bankQuestionCount} questions).`
+                          : `Leave all unchecked to pull from the full bank (${selectedBank?.questionCount ?? meta.bankQuestionCount} questions).`
                         : 'Leave all unchecked to pull from the full question bank.'}
                   </p>
                 </fieldset>

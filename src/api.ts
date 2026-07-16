@@ -15,18 +15,38 @@ const API = resolveApiBase();
 
 export type SectionInfo = { id: number; name: string; range: string; questionCount?: number };
 
+export type QuestionBankInfo = {
+  id: string;
+  name: string;
+  questionCount: number;
+  sections: SectionInfo[];
+};
+
 /** How many bank questions can be drawn for the current domain filter (Json mode). */
 export function getAvailableQuestionCount(
   meta: ExamMetadata,
   selectedDomainIds: number[],
   useAiMode: boolean,
+  bankId?: string,
 ): number {
   if (useAiMode) return meta.maxQuestionsPerSession;
-  if (selectedDomainIds.length === 0) return meta.bankQuestionCount;
+  const bank = getSelectedBank(meta, bankId);
+  if (selectedDomainIds.length === 0) return bank.questionCount;
   return selectedDomainIds.reduce(
-    (sum, id) => sum + (meta.sections.find((s) => s.id === id)?.questionCount ?? 0),
+    (sum, id) => sum + (bank.sections.find((s) => s.id === id)?.questionCount ?? 0),
     0,
   );
+}
+
+export function getSelectedBank(meta: ExamMetadata, bankId?: string): QuestionBankInfo {
+  const banks = meta.questionBanks ?? [];
+  const id = bankId ?? meta.defaultBankId ?? 'ankush-yagnesh';
+  return banks.find((b) => b.id === id) ?? {
+    id,
+    name: 'Question bank',
+    questionCount: meta.bankQuestionCount,
+    sections: meta.sections,
+  };
 }
 export type ExamScenarioInfo = { id: number; name: string; primaryDomains: string[] };
 export type ExamMetadata = {
@@ -46,6 +66,8 @@ export type ExamMetadata = {
   responseFormat: string | null;
   examScenariosNote: string | null;
   scenarios: ExamScenarioInfo[] | null;
+  questionBanks: QuestionBankInfo[] | null;
+  defaultBankId: string | null;
 };
 
 /** Full CCA-F exam: 60 questions, 120 minutes, 720 scaled pass. */
@@ -158,6 +180,7 @@ export async function createSession(
   sectionIds?: number[],
   source?: string,
   learningUrl?: string,
+  bankId?: string,
 ): Promise<SessionDto> {
   const res = await fetch(`${API}/sessions`, {
     method: 'POST',
@@ -167,6 +190,7 @@ export async function createSession(
       sectionIds: sectionIds?.length ? sectionIds : null,
       source: source ?? null,
       learningUrl: learningUrl?.trim() || null,
+      bankId: bankId ?? null,
     }),
   });
   if (!res.ok) {

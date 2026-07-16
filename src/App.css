@@ -394,6 +394,25 @@ body {
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
 }
 
+.field .bank-select {
+  width: 100%;
+  max-width: 28rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--text);
+  font-size: 0.95rem;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.field .bank-select:focus {
+  outline: none;
+  border-color: var(--black);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+}
+
 .field .text-input {
   width: 100%;
   padding: 0.7rem 0.9rem;
