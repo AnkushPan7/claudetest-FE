@@ -68,17 +68,41 @@ type AnswerComparisonProps = {
   correctAnswer: string;
   isCorrect: boolean;
   answered?: boolean;
-  selectedOptionText?: string | null;
-  correctOptionText?: string | null;
+  /** Why the selected answer is right or wrong — not the option wording. */
+  selectedExplanation?: string | null;
+  /** Why the correct answer is correct — not the option wording. */
+  correctExplanation?: string | null;
 };
+
+function ComparisonBody({
+  letter,
+  explanation,
+  letterClass,
+}: {
+  letter?: string | null;
+  explanation?: string | null;
+  letterClass: string;
+}) {
+  if (!explanation?.trim() && !letter) {
+    return <p className="answer-comparison-value muted">—</p>;
+  }
+
+  return (
+    <p className="answer-comparison-value">
+      {letter ? <strong className={letterClass}>{letter}</strong> : null}
+      {letter && explanation?.trim() ? ' — ' : null}
+      {explanation?.trim() ? <FormatText text={explanation.trim()} /> : null}
+    </p>
+  );
+}
 
 export function AnswerComparison({
   selectedAnswer,
   correctAnswer,
   isCorrect,
   answered = true,
-  selectedOptionText,
-  correctOptionText,
+  selectedExplanation,
+  correctExplanation,
 }: AnswerComparisonProps) {
   if (!answered) {
     return (
@@ -91,15 +115,11 @@ export function AnswerComparison({
           </div>
           <div className="answer-comparison-side answer-comparison-correct-side">
             <span className="answer-comparison-label">Correct answer</span>
-            <p className="answer-comparison-value">
-              <strong className="answer-ok">{correctAnswer}</strong>
-              {correctOptionText ? (
-                <>
-                  {' '}
-                  — <FormatText text={correctOptionText} />
-                </>
-              ) : null}
-            </p>
+            <ComparisonBody
+              letter={correctAnswer}
+              explanation={correctExplanation}
+              letterClass="answer-ok"
+            />
           </div>
         </div>
       </div>
@@ -114,29 +134,19 @@ export function AnswerComparison({
           className={`answer-comparison-side ${isCorrect ? 'answer-comparison-correct-side' : 'answer-comparison-wrong-side'}`}
         >
           <span className="answer-comparison-label">Your answer</span>
-          <p className="answer-comparison-value">
-            <strong className={isCorrect ? 'answer-ok' : 'answer-bad'}>
-              {selectedAnswer ?? '—'}
-            </strong>
-            {selectedOptionText ? (
-              <>
-                {' '}
-                — <FormatText text={selectedOptionText} />
-              </>
-            ) : null}
-          </p>
+          <ComparisonBody
+            letter={selectedAnswer}
+            explanation={selectedExplanation}
+            letterClass={isCorrect ? 'answer-ok' : 'answer-bad'}
+          />
         </div>
         <div className="answer-comparison-side answer-comparison-correct-side">
           <span className="answer-comparison-label">Correct answer</span>
-          <p className="answer-comparison-value">
-            <strong className="answer-ok">{correctAnswer}</strong>
-            {correctOptionText ? (
-              <>
-                {' '}
-                — <FormatText text={correctOptionText} />
-              </>
-            ) : null}
-          </p>
+          <ComparisonBody
+            letter={correctAnswer}
+            explanation={correctExplanation}
+            letterClass="answer-ok"
+          />
         </div>
       </div>
     </div>

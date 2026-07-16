@@ -131,12 +131,28 @@ export default function ResultDetailView({
                       correctAnswer={item.correctAnswer}
                       isCorrect={item.isCorrect}
                       answered={item.answered}
-                      selectedOptionText={
+                      selectedExplanation={
                         item.selectedAnswer
-                          ? item.options[item.selectedAnswer] ?? null
+                          ? getExplanationForOption({
+                              letter: item.selectedAnswer,
+                              correctAnswer: item.correctAnswer,
+                              explanation: item.explanation,
+                              selectedAnswer: item.selectedAnswer,
+                              optionExplanations: item.optionExplanations,
+                              wrongAnswerExplanation: item.wrongAnswerExplanation,
+                            }).body
                           : null
                       }
-                      correctOptionText={item.options[item.correctAnswer] ?? null}
+                      correctExplanation={
+                        getExplanationForOption({
+                          letter: item.correctAnswer,
+                          correctAnswer: item.correctAnswer,
+                          explanation: item.explanation,
+                          selectedAnswer: item.selectedAnswer,
+                          optionExplanations: item.optionExplanations,
+                          wrongAnswerExplanation: item.wrongAnswerExplanation,
+                        }).body
+                      }
                     />
                   </div>
                 </div>

@@ -884,11 +884,23 @@ export default function App() {
                   correctAnswer={currentFeedback.correctAnswer}
                   isCorrect={currentFeedback.isCorrect}
                   answered
-                  selectedOptionText={
-                    question.options[currentFeedback.selectedAnswer] ?? null
+                  selectedExplanation={
+                    getExplanationForOption({
+                      letter: currentFeedback.selectedAnswer,
+                      correctAnswer: currentFeedback.correctAnswer,
+                      explanation: currentFeedback.explanation,
+                      selectedAnswer: currentFeedback.selectedAnswer,
+                      wrongAnswerExplanation: currentFeedback.wrongAnswerExplanation,
+                    }).body
                   }
-                  correctOptionText={
-                    question.options[currentFeedback.correctAnswer] ?? null
+                  correctExplanation={
+                    getExplanationForOption({
+                      letter: currentFeedback.correctAnswer,
+                      correctAnswer: currentFeedback.correctAnswer,
+                      explanation: currentFeedback.explanation,
+                      selectedAnswer: currentFeedback.selectedAnswer,
+                      wrongAnswerExplanation: currentFeedback.wrongAnswerExplanation,
+                    }).body
                   }
                 />
               </div>
@@ -1206,12 +1218,28 @@ export default function App() {
                             correctAnswer={item.correctAnswer}
                             isCorrect={item.isCorrect}
                             answered={item.answered}
-                            selectedOptionText={
+                            selectedExplanation={
                               item.selectedAnswer
-                                ? item.options[item.selectedAnswer] ?? null
+                                ? getExplanationForOption({
+                                    letter: item.selectedAnswer,
+                                    correctAnswer: item.correctAnswer,
+                                    explanation: item.explanation,
+                                    selectedAnswer: item.selectedAnswer,
+                                    optionExplanations: item.optionExplanations,
+                                    wrongAnswerExplanation: item.wrongAnswerExplanation,
+                                  }).body
                                 : null
                             }
-                            correctOptionText={item.options[item.correctAnswer] ?? null}
+                            correctExplanation={
+                              getExplanationForOption({
+                                letter: item.correctAnswer,
+                                correctAnswer: item.correctAnswer,
+                                explanation: item.explanation,
+                                selectedAnswer: item.selectedAnswer,
+                                optionExplanations: item.optionExplanations,
+                                wrongAnswerExplanation: item.wrongAnswerExplanation,
+                              }).body
+                            }
                           />
                         </div>
                       </div>
