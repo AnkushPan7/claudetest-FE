@@ -40,7 +40,7 @@ export function getAvailableQuestionCount(
 
 export function getSelectedBank(meta: ExamMetadata, bankId?: string): QuestionBankInfo {
   const banks = meta.questionBanks ?? [];
-  const id = bankId ?? meta.defaultBankId ?? 'ankush-yagnesh';
+  const id = bankId ?? meta.defaultBankId ?? 'ankush';
   return banks.find((b) => b.id === id) ?? {
     id,
     name: 'Question bank',
@@ -141,6 +141,7 @@ export type AnswerSubmit = {
   correctAnswer: string;
   isCorrect: boolean;
   explanation: string;
+  wrongAnswerExplanation?: string | null;
 };
 
 export type QuestionReviewItem = {
@@ -154,6 +155,8 @@ export type QuestionReviewItem = {
   isCorrect: boolean;
   explanation: string;
   answered: boolean;
+  wrongAnswerExplanation?: string | null;
+  optionExplanations?: Record<string, string> | null;
 };
 
 export type SessionReview = {

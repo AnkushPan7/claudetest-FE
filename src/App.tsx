@@ -27,6 +27,11 @@ import {
   clearStoredUserEmail,
 } from './api';
 import Dashboard from './Dashboard';
+import {
+  AnswerComparison,
+  OptionExplanation,
+  getExplanationForOption,
+} from './AnswerExplanations';
 import { FormatText } from './formatText';
 
 type Screen = 'welcome' | 'dashboard' | 'home' | 'quiz' | 'submit-review' | 'results';
@@ -54,7 +59,7 @@ export default function App() {
   const [questionCount, setQuestionCount] = useState(20);
   const [selectedSections, setSelectedSections] = useState<number[]>([]);
   const [useAiMode, setUseAiMode] = useState(false);
-  const [selectedBankId, setSelectedBankId] = useState('ankush-yagnesh');
+  const [selectedBankId, setSelectedBankId] = useState('ankush');
   const [learningUrl, setLearningUrl] = useState('');
 
   const [session, setSession] = useState<SessionDto | null>(null);
@@ -78,9 +83,9 @@ export default function App() {
         setMeta(m);
         const ai = m.questionSource.toLowerCase() === 'ai';
         setUseAiMode(ai);
-        setSelectedBankId(m.defaultBankId ?? 'ankush-yagnesh');
+        setSelectedBankId(m.defaultBankId ?? 'ankush');
         setLearningUrl(m.learningUrl ?? m.learningUrls?.[0] ?? '');
-        const bank = getSelectedBank(m, m.defaultBankId ?? 'ankush-yagnesh');
+        const bank = getSelectedBank(m, m.defaultBankId ?? 'ankush');
         const max = ai ? m.maxQuestionsPerSession : bank.questionCount;
         setQuestionCount(Math.min(m.totalQuestions, max));
       })
@@ -821,37 +826,73 @@ export default function App() {
                 ]
                   .filter(Boolean)
                   .join(' ');
+                const explText =
+                  questionAnswered && currentFeedback
+                    ? getExplanationForOption({
+                        letter,
+                        correctAnswer: currentFeedback.correctAnswer,
+                        explanation: currentFeedback.explanation,
+                        optionText: text,
+                        selectedAnswer: currentFeedback.selectedAnswer,
+                        wrongAnswerExplanation: currentFeedback.wrongAnswerExplanation,
+                      })
+                    : null;
+
                 return (
-                  <button
-                    key={letter}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    className={optionClass}
-                    onClick={() => selectAnswer(letter)}
-                    disabled={loading || answerSubmitting || questionAnswered}
-                  >
-                    <span className="option-radio" aria-hidden="true" />
-                    <span className="option-letter" aria-hidden="true">
-                      {letter}
-                    </span>
-                    <span className="option-text">
-                      <FormatText text={text} />
-                    </span>
-                    {isCorrectOption && (
-                      <span className="option-result ok" aria-hidden="true">
-                        ✓
+                  <div key={letter} className="option-block">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      className={optionClass}
+                      onClick={() => selectAnswer(letter)}
+                      disabled={loading || answerSubmitting || questionAnswered}
+                    >
+                      <span className="option-radio" aria-hidden="true" />
+                      <span className="option-letter" aria-hidden="true">
+                        {letter}
                       </span>
-                    )}
-                    {isWrongSelection && (
-                      <span className="option-result bad" aria-hidden="true">
-                        ✗
+                      <span className="option-text">
+                        <FormatText text={text} />
                       </span>
+                      {isCorrectOption && (
+                        <span className="option-result ok" aria-hidden="true">
+                          ✓
+                        </span>
+                      )}
+                      {isWrongSelection && (
+                        <span className="option-result bad" aria-hidden="true">
+                          ✗
+                        </span>
+                      )}
+                    </button>
+                    {questionAnswered && explText && (
+                      <OptionExplanation
+                        isCorrectOption={Boolean(isCorrectOption)}
+                        explanationText={explText}
+                      />
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
+
+            {questionAnswered && currentFeedback && (
+              <div className="answer-comparison-wrap">
+                <AnswerComparison
+                  selectedAnswer={currentFeedback.selectedAnswer}
+                  correctAnswer={currentFeedback.correctAnswer}
+                  isCorrect={currentFeedback.isCorrect}
+                  answered
+                  selectedOptionText={
+                    question.options[currentFeedback.selectedAnswer] ?? null
+                  }
+                  correctOptionText={
+                    question.options[currentFeedback.correctAnswer] ?? null
+                  }
+                />
+              </div>
+            )}
 
             {!questionAnswered && (
               <div className="quiz-submit-answer">
@@ -884,27 +925,12 @@ export default function App() {
                   {currentFeedback.isCorrect ? (
                     <strong>Correct</strong>
                   ) : (
-                    <>
-                      <strong>Incorrect</strong>
-                      {currentFeedback.correctAnswer && (
-                        <span className="muted">
-                          {' '}
-                          — correct answer: {currentFeedback.correctAnswer}
-                        </span>
-                      )}
-                    </>
+                    <strong>Incorrect</strong>
                   )}
                 </p>
-                {currentFeedback.explanation ? (
-                  <p className="question-feedback-explanation">
-                    <FormatText text={currentFeedback.explanation} />
-                  </p>
-                ) : (
-                  <p className="question-feedback-explanation muted">
-                    Explanation unavailable — restart the local backend if you recently updated the
-                    API.
-                  </p>
-                )}
+                <p className="hint" style={{ margin: 0 }}>
+                  Open an option&apos;s Explanation to see why it is correct or incorrect.
+                </p>
               </div>
             )}
 
@@ -1146,25 +1172,48 @@ export default function App() {
                                 : isSelected
                                   ? 'selected'
                                   : '';
+                            const explText = getExplanationForOption({
+                              letter,
+                              correctAnswer: item.correctAnswer,
+                              explanation: item.explanation,
+                              optionText: optText,
+                              selectedAnswer: item.selectedAnswer,
+                              optionExplanations: item.optionExplanations,
+                              wrongAnswerExplanation: item.wrongAnswerExplanation,
+                            });
                             return (
-                              <li
-                                key={letter}
-                                className={`review-option ${state}`}
-                              >
-                                <span className="option-radio" aria-hidden="true" />
-                                <span className="option-letter" aria-hidden="true">
-                                  {letter}
-                                </span>
-                                <span className="option-text">
-                                  <FormatText text={optText} />
-                                </span>
+                              <li key={letter} className="review-option-block">
+                                <div className={`review-option ${state}`}>
+                                  <span className="option-radio" aria-hidden="true" />
+                                  <span className="option-letter" aria-hidden="true">
+                                    {letter}
+                                  </span>
+                                  <span className="option-text">
+                                    <FormatText text={optText} />
+                                  </span>
+                                </div>
+                                <OptionExplanation
+                                  isCorrectOption={isCorrect}
+                                  explanationText={explText}
+                                />
                               </li>
                             );
                           })}
                         </ul>
-                        <p className="review-explanation">
-                          <FormatText text={item.explanation} />
-                        </p>
+                        <div className="result-detail-answers">
+                          <AnswerComparison
+                            selectedAnswer={item.selectedAnswer}
+                            correctAnswer={item.correctAnswer}
+                            isCorrect={item.isCorrect}
+                            answered={item.answered}
+                            selectedOptionText={
+                              item.selectedAnswer
+                                ? item.options[item.selectedAnswer] ?? null
+                                : null
+                            }
+                            correctOptionText={item.options[item.correctAnswer] ?? null}
+                          />
+                        </div>
                       </div>
                     </details>
                   );

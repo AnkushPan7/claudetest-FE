@@ -1,4 +1,9 @@
 import type { QuestionReviewItem } from './api';
+import {
+  AnswerComparison,
+  OptionExplanation,
+  getExplanationForOption,
+} from './AnswerExplanations';
 import { FormatText } from './formatText';
 import './ResultDetailView.css';
 
@@ -73,28 +78,6 @@ export default function ResultDetailView({
                     </span>
                   </p>
 
-                  <div className="result-detail-answers">
-                    {item.selectedAnswer ? (
-                      <p className="result-detail-your-answer">
-                        <strong>Your answer:</strong>{' '}
-                        <span className={item.isCorrect ? 'answer-ok' : 'answer-bad'}>
-                          {item.selectedAnswer}
-                        </span>
-                        {!item.isCorrect && (
-                          <span className="muted">
-                            {' '}
-                            · Correct: <strong>{item.correctAnswer}</strong>
-                          </span>
-                        )}
-                      </p>
-                    ) : (
-                      <p className="result-detail-your-answer muted">
-                        <strong>Your answer:</strong> Not answered · Correct:{' '}
-                        <strong>{item.correctAnswer}</strong>
-                      </p>
-                    )}
-                  </div>
-
                   <ul className="review-options">
                     {(['A', 'B', 'C', 'D'] as const).map((letter) => {
                       const optText = item.options[letter];
@@ -108,29 +91,54 @@ export default function ResultDetailView({
                           : isSelected
                             ? 'selected'
                             : '';
+                      const explText = getExplanationForOption({
+                        letter,
+                        correctAnswer: item.correctAnswer,
+                        explanation: item.explanation,
+                        optionText: optText,
+                        selectedAnswer: item.selectedAnswer,
+                        optionExplanations: item.optionExplanations,
+                        wrongAnswerExplanation: item.wrongAnswerExplanation,
+                      });
                       return (
-                        <li key={letter} className={`review-option ${state}`}>
-                          <span className="option-radio" aria-hidden="true" />
-                          <span className="option-letter" aria-hidden="true">
-                            {letter}
-                          </span>
-                          <span className="option-text">
-                            <FormatText text={optText} />
-                          </span>
-                          {isSelected && (
-                            <span className="option-you-picked" aria-label="Your selection">
-                              You
+                        <li key={letter} className="review-option-block">
+                          <div className={`review-option ${state}`}>
+                            <span className="option-radio" aria-hidden="true" />
+                            <span className="option-letter" aria-hidden="true">
+                              {letter}
                             </span>
-                          )}
+                            <span className="option-text">
+                              <FormatText text={optText} />
+                            </span>
+                            {isSelected && (
+                              <span className="option-you-picked" aria-label="Your selection">
+                                You
+                              </span>
+                            )}
+                          </div>
+                          <OptionExplanation
+                            isCorrectOption={isCorrect}
+                            explanationText={explText}
+                          />
                         </li>
                       );
                     })}
                   </ul>
 
-                  <p className="review-explanation">
-                    <strong>Explanation:</strong>{' '}
-                    <FormatText text={item.explanation} />
-                  </p>
+                  <div className="result-detail-answers">
+                    <AnswerComparison
+                      selectedAnswer={item.selectedAnswer}
+                      correctAnswer={item.correctAnswer}
+                      isCorrect={item.isCorrect}
+                      answered={item.answered}
+                      selectedOptionText={
+                        item.selectedAnswer
+                          ? item.options[item.selectedAnswer] ?? null
+                          : null
+                      }
+                      correctOptionText={item.options[item.correctAnswer] ?? null}
+                    />
+                  </div>
                 </div>
               </details>
             );

@@ -824,6 +824,12 @@ body {
   gap: 0.7rem;
 }
 
+.option-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 .option {
   display: flex;
   gap: 0.75rem;
@@ -953,6 +959,105 @@ body {
   color: var(--bad);
   background: var(--white);
   border: 2px solid var(--bad-border);
+}
+
+.option-explanation {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  overflow: hidden;
+}
+
+.option-explanation summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.85rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.option-explanation summary::-webkit-details-marker {
+  display: none;
+}
+
+.option-explanation-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.option-explanation-bad .option-explanation-icon {
+  background: transparent;
+  color: var(--bad);
+  border: 1.5px solid var(--bad);
+}
+
+.option-explanation-ok .option-explanation-icon {
+  background: transparent;
+  color: var(--ok);
+  border: 1.5px solid var(--ok);
+}
+
+.option-explanation-ok .option-explanation-label {
+  color: var(--ok);
+}
+
+.option-explanation-label {
+  flex: 1;
+}
+
+.option-explanation-chevron {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.15s ease;
+  margin-bottom: 0.15rem;
+}
+
+.option-explanation[open] .option-explanation-chevron {
+  transform: rotate(-135deg);
+  margin-bottom: -0.1rem;
+}
+
+.option-explanation-body {
+  padding: 0.65rem 0.85rem 0.75rem 2.45rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+}
+
+.option-explanation-text {
+  margin: 0;
+}
+
+.verdict-ok {
+  color: var(--ok);
+  font-weight: 700;
+}
+
+.verdict-bad {
+  color: var(--bad);
+  font-weight: 700;
+}
+
+.review-option-block {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .question-feedback {
@@ -1187,6 +1292,168 @@ body {
   border-radius: var(--radius-sm);
   line-height: 1.55;
   font-size: 0.9rem;
+}
+
+.answer-explanations {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.answer-explanations-compact {
+  margin-top: 0.5rem;
+}
+
+.answer-explanation-block {
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+.answer-explanation-wrong {
+  border-color: var(--bad-border);
+  background: var(--bad-bg);
+}
+
+.answer-explanation-correct {
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+
+.answer-explanation-only {
+  border-color: var(--border);
+  background: var(--surface2);
+}
+
+.answer-explanation-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.answer-explanation-body {
+  margin: 0;
+  line-height: 1.55;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.feedback-comparison {
+  margin: 0 0 0.65rem;
+}
+
+.answer-comparison-wrap {
+  margin-top: 1rem;
+}
+
+.answer-comparison {
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  padding: 0;
+}
+
+.answer-comparison-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.answer-comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.answer-comparison-side {
+  padding: 0.9rem 1rem;
+  border-radius: var(--radius-md);
+  border: none;
+  background: #e4e4e7;
+  color: #18181b;
+}
+
+.answer-comparison-wrong-side {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.answer-comparison-correct-side {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.answer-comparison-label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.answer-comparison-wrong-side .answer-comparison-label,
+.answer-comparison-correct-side .answer-comparison-label {
+  opacity: 0.9;
+}
+
+.answer-comparison-value {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: inherit;
+}
+
+.answer-comparison-wrong-side .answer-bad,
+.answer-comparison-wrong-side .answer-ok,
+.answer-comparison-correct-side .answer-ok,
+.answer-comparison-correct-side .answer-bad {
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.answer-comparison-wrong-side .inline-code,
+.answer-comparison-correct-side .inline-code {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  border-color: transparent;
+}
+
+@media (max-width: 700px) {
+  .answer-comparison-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.question-feedback .answer-explanations {
+  margin-top: 0;
+}
+
+.question-feedback .answer-explanation-block {
+  background: transparent;
+}
+
+.question-feedback.feedback-ok .answer-explanation-correct,
+.question-feedback.feedback-bad .answer-explanation-correct,
+.question-feedback.feedback-bad .answer-explanation-wrong {
+  border-color: transparent;
+  padding: 0.5rem 0 0;
+}
+
+.question-feedback .answer-explanation-wrong + .answer-explanation-correct {
+  border-top: 1px solid var(--border);
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
 }
 
 .progress {
