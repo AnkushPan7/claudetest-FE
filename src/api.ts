@@ -384,7 +384,19 @@ export type AdminResultSummary = {
 
 export function getAdminToken(): string | null {
   try {
-    return sessionStorage.getItem(ADMIN_TOKEN_KEY);
+    // Prefer localStorage so Review links opened in a new tab (target=_blank + noopener)
+    // still see the admin session. Migrate any legacy sessionStorage token.
+    const fromLocal = localStorage.getItem(ADMIN_TOKEN_KEY);
+    if (fromLocal) return fromLocal;
+
+    const fromSession = sessionStorage.getItem(ADMIN_TOKEN_KEY);
+    if (fromSession) {
+      localStorage.setItem(ADMIN_TOKEN_KEY, fromSession);
+      sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+      return fromSession;
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -392,7 +404,8 @@ export function getAdminToken(): string | null {
 
 export function setAdminToken(token: string): void {
   try {
-    sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
+    localStorage.setItem(ADMIN_TOKEN_KEY, token);
+    sessionStorage.removeItem(ADMIN_TOKEN_KEY);
   } catch {
     /* ignore */
   }
@@ -400,6 +413,7 @@ export function setAdminToken(token: string): void {
 
 export function clearAdminToken(): void {
   try {
+    localStorage.removeItem(ADMIN_TOKEN_KEY);
     sessionStorage.removeItem(ADMIN_TOKEN_KEY);
   } catch {
     /* ignore */
