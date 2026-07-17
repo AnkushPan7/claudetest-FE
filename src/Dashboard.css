@@ -255,6 +255,15 @@
   background: #fafafa;
 }
 
+.dashboard-review-btn {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
 .score-cell {
   font-weight: 600;
 }

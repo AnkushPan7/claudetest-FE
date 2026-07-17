@@ -12,9 +12,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { useState } from 'react';
-import type { ExamMetadata, QuestionReviewItem, ResultHistoryEntry } from './api';
-import { fetchResultDetail, getSessionExamTargets } from './api';
+import type { ExamMetadata, ResultHistoryEntry } from './api';
+import { getSessionExamTargets } from './api';
 import {
   buildDailyProgress,
   buildDashboardStats,
@@ -22,7 +21,6 @@ import {
   getEntryScore,
   isEntryPassed,
 } from './dashboardUtils';
-import ResultDetailView from './ResultDetailView';
 import './Dashboard.css';
 
 type DashboardProps = {
@@ -72,42 +70,11 @@ export default function Dashboard({
   meta,
   onStartPractice,
 }: DashboardProps) {
-  const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
-  const [detailQuestions, setDetailQuestions] = useState<QuestionReviewItem[]>([]);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
-
   const stats = buildDashboardStats(history, meta);
   const dailyProgress = buildDailyProgress(history, 14);
   const scoreTrend = buildScoreTrend(history);
   const hasData = history.length > 0;
   const passTarget = meta?.passingScore ?? 720;
-
-  const handleSelectResult = async (entry: ResultHistoryEntry) => {
-    if (selectedResultId === entry.id) {
-      setSelectedResultId(null);
-      setDetailQuestions([]);
-      setDetailError(null);
-      return;
-    }
-
-    setSelectedResultId(entry.id);
-    setDetailLoading(true);
-    setDetailError(null);
-    setDetailQuestions([]);
-
-    try {
-      const detail = await fetchResultDetail(userEmail, entry.id);
-      setDetailQuestions(detail.questions);
-    } catch {
-      setDetailError('Could not load question details for this session.');
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
-  const selectedEntry = history.find((e) => e.id === selectedResultId) ?? null;
-  const selectedScore = selectedEntry ? getEntryScore(selectedEntry) : null;
 
   return (
     <div className="dashboard">
@@ -325,7 +292,8 @@ export default function Dashboard({
         ) : (
           <>
             <p className="results-table-hint hint">
-              Click any row to view each question, your answer, the correct answer, and explanation.
+              Click Review to open each question, your answer, the correct answer, and explanation in a
+              new tab.
             </p>
             <div className="results-table-wrap">
               <table className="results-table">
@@ -336,6 +304,7 @@ export default function Dashboard({
                     <th>Score</th>
                     <th>Correct</th>
                     <th>Status</th>
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -343,23 +312,8 @@ export default function Dashboard({
                     const score = getEntryScore(entry);
                     const passed = isEntryPassed(entry, meta);
                     const targets = meta ? getSessionExamTargets(entry.total, meta) : null;
-                    const isSelected = selectedResultId === entry.id;
                     return (
-                      <tr
-                        key={entry.id}
-                        className={`clickable ${isSelected ? 'selected-row' : ''}`}
-                        onClick={() => void handleSelectResult(entry)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            void handleSelectResult(entry);
-                          }
-                        }}
-                        tabIndex={0}
-                        role="button"
-                        aria-pressed={isSelected}
-                        aria-label={`View details for exam on ${formatHistoryDate(entry.completedAt)}`}
-                      >
+                      <tr key={entry.id}>
                         <td>{formatHistoryDate(entry.completedAt)}</td>
                         <td>
                           <span className="pill history-source">
@@ -380,36 +334,26 @@ export default function Dashboard({
                             {passed ? 'Pass' : 'Below pass'}
                           </span>
                         </td>
+                        <td>
+                          {entry.hasDetail ? (
+                            <a
+                              href={`/review/${encodeURIComponent(entry.id)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="btn secondary dashboard-review-btn"
+                            >
+                              Review
+                            </a>
+                          ) : (
+                            <span className="muted">—</span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-
-            {detailLoading && (
-              <p className="result-detail-loading">Loading question details…</p>
-            )}
-
-            {detailError && <div className="banner error">{detailError}</div>}
-
-            {selectedEntry && !detailLoading && (
-              <ResultDetailView
-                dateLabel={formatHistoryDate(selectedEntry.completedAt)}
-                sourceLabel={selectedEntry.sourceMode === 'Ai' ? 'AI generated' : 'Question bank'}
-                scoreLabel={
-                  selectedScore != null
-                    ? String(selectedScore)
-                    : `${selectedEntry.percentCorrect}%`
-                }
-                questions={detailQuestions}
-                onClose={() => {
-                  setSelectedResultId(null);
-                  setDetailQuestions([]);
-                  setDetailError(null);
-                }}
-              />
-            )}
           </>
         )}
       </section>

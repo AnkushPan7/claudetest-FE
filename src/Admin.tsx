@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  adminFetchResultDetail,
   adminFetchResults,
   adminFetchUsers,
   adminLogin,
@@ -9,9 +8,7 @@ import {
   setAdminToken,
   type AdminResultSummary,
   type AdminUserSummary,
-  type QuestionReviewItem,
 } from './api';
-import ResultDetailView from './ResultDetailView';
 import './Admin.css';
 
 function formatDate(iso: string): string {
@@ -31,11 +28,6 @@ export default function Admin() {
   const [users, setUsers] = useState<AdminUserSummary[]>([]);
   const [results, setResults] = useState<AdminResultSummary[]>([]);
   const [tab, setTab] = useState<'users' | 'results'>('results');
-
-  const [selectedResultId, setSelectedResultId] = useState<string | null>(null);
-  const [detailQuestions, setDetailQuestions] = useState<QuestionReviewItem[]>([]);
-  const [detailMeta, setDetailMeta] = useState<AdminResultSummary | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -81,31 +73,6 @@ export default function Admin() {
     setToken(null);
     setUsers([]);
     setResults([]);
-    setSelectedResultId(null);
-    setDetailQuestions([]);
-    setDetailMeta(null);
-  };
-
-  const openResultDetail = async (row: AdminResultSummary) => {
-    if (!row.hasDetail) {
-      setError('Detailed question review is not available for this exam.');
-      return;
-    }
-
-    setSelectedResultId(row.id);
-    setDetailMeta(row);
-    setDetailLoading(true);
-    setError(null);
-    try {
-      const detail = await adminFetchResultDetail(row.id);
-      setDetailQuestions(detail.questions);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load details');
-      setSelectedResultId(null);
-      setDetailMeta(null);
-    } finally {
-      setDetailLoading(false);
-    }
   };
 
   if (!token) {
@@ -264,13 +231,14 @@ export default function Admin() {
                     <td>{row.sourceMode}</td>
                     <td>
                       {row.hasDetail ? (
-                        <button
-                          type="button"
+                        <a
+                          href={`/admin/review/${encodeURIComponent(row.id)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           className="btn secondary admin-view-btn"
-                          onClick={() => openResultDetail(row)}
                         >
                           Review
-                        </button>
+                        </a>
                       ) : (
                         <span className="muted">—</span>
                       )}
@@ -281,26 +249,6 @@ export default function Admin() {
             </tbody>
           </table>
         </section>
-      )}
-
-      {selectedResultId && detailMeta && (
-        <div className="admin-detail-overlay">
-          {detailLoading ? (
-            <p className="muted">Loading review…</p>
-          ) : (
-            <ResultDetailView
-              dateLabel={formatDate(detailMeta.completedAt)}
-              sourceLabel={detailMeta.sourceMode}
-              scoreLabel={String(detailMeta.scaledScore ?? '—')}
-              questions={detailQuestions}
-              onClose={() => {
-                setSelectedResultId(null);
-                setDetailMeta(null);
-                setDetailQuestions([]);
-              }}
-            />
-          )}
-        </div>
       )}
     </div>
   );

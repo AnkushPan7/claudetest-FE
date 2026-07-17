@@ -1,0 +1,32 @@
+.result-review-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.result-review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.result-review-header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+}
+
+.result-review-status {
+  margin: 1rem 0;
+}
+
+.result-review-page .result-detail-panel {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .result-review-header {
+    flex-direction: column;
+  }
+}
