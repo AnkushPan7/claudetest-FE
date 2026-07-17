@@ -142,6 +142,7 @@ export type AnswerSubmit = {
   isCorrect: boolean;
   explanation: string;
   wrongAnswerExplanation?: string | null;
+  optionExplanations?: Record<string, string> | null;
 };
 
 export type QuestionReviewItem = {

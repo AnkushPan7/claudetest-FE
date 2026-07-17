@@ -834,6 +834,7 @@ export default function App() {
                         explanation: currentFeedback.explanation,
                         optionText: text,
                         selectedAnswer: currentFeedback.selectedAnswer,
+                        optionExplanations: currentFeedback.optionExplanations,
                         wrongAnswerExplanation: currentFeedback.wrongAnswerExplanation,
                       })
                     : null;
@@ -890,6 +891,7 @@ export default function App() {
                       correctAnswer: currentFeedback.correctAnswer,
                       explanation: currentFeedback.explanation,
                       selectedAnswer: currentFeedback.selectedAnswer,
+                      optionExplanations: currentFeedback.optionExplanations,
                       wrongAnswerExplanation: currentFeedback.wrongAnswerExplanation,
                     }).body
                   }
@@ -899,6 +901,7 @@ export default function App() {
                       correctAnswer: currentFeedback.correctAnswer,
                       explanation: currentFeedback.explanation,
                       selectedAnswer: currentFeedback.selectedAnswer,
+                      optionExplanations: currentFeedback.optionExplanations,
                       wrongAnswerExplanation: currentFeedback.wrongAnswerExplanation,
                     }).body
                   }

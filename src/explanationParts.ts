@@ -83,19 +83,24 @@ function firstSentences(text: string, max = 2): string {
   return parts.slice(0, max).join(' ');
 }
 
-function buildIncorrectFromCorrect(
+/** Last-resort unique note when bank has no distractor text for this letter. */
+function buildIncorrectFallback(
+  letter: string,
   optionText: string | undefined,
+  correctLetter: string,
   correctBody: string,
 ): string {
-  const rationale = firstSentences(correctBody, 2);
-  if (optionText?.trim()) {
-    const hint =
-      optionText.trim().length > 140
-        ? `${optionText.trim().slice(0, 137)}…`
-        : optionText.trim();
-    return `This approach (“${hint}”) does not correctly solve the problem. ${rationale}`;
+  const correctHint = firstSentences(correctBody, 1);
+  const optionHint = optionText?.trim()
+    ? optionText.trim().length > 100
+      ? `${optionText.trim().slice(0, 97)}…`
+      : optionText.trim()
+    : null;
+
+  if (optionHint) {
+    return `Option ${letter} (“${optionHint}”) does not address the root cause the scenario requires. The better approach is ${correctLetter}: ${correctHint}`;
   }
-  return `This option does not correctly solve the problem. ${rationale}`;
+  return `Option ${letter} does not address the root cause the scenario requires. The better approach is ${correctLetter}: ${correctHint}`;
 }
 
 export type OptionExplanationContent = {
@@ -137,7 +142,7 @@ export function buildOptionExplanation(args: {
 
   // Avoid lazy redirects like "see the correct option"
   if (!body || /see the correct option/i.test(body)) {
-    body = buildIncorrectFromCorrect(args.optionText, correctBody);
+    body = buildIncorrectFallback(letter, args.optionText, correct, correctBody);
   }
 
   return { isCorrect: false, body };
