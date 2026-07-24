@@ -8,6 +8,7 @@ import {
   type ResultHistoryEntry,
 } from './api';
 import ResultDetailView from './ResultDetailView';
+import { ThemeToggle } from './theme';
 import './ResultReviewPage.css';
 
 type ReviewMode = 'admin' | 'user';
@@ -88,9 +89,12 @@ export default function ResultReviewPage({ mode, resultId }: ResultReviewPagePro
             {mode === 'admin' ? 'Admin view' : 'Your practice result'} · opens in its own tab
           </p>
         </div>
-        <a href={backHref} className="btn secondary">
-          {backLabel}
-        </a>
+        <div className="result-review-actions">
+          <ThemeToggle />
+          <a href={backHref} className="btn secondary">
+            {backLabel}
+          </a>
+        </div>
       </header>
 
       {loading && <p className="muted result-review-status">Loading review…</p>}

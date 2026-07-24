@@ -1,10 +1,10 @@
-.result-detail-panel {
+﻿.result-detail-panel {
   margin-top: 1.25rem;
   padding: 1.35rem 1.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
-  box-shadow: var(--shadow-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .result-detail-header {
@@ -41,7 +41,7 @@
 .result-detail-item {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  background: var(--white);
+  background: var(--surface2);
 }
 
 .result-detail-answers {
@@ -55,12 +55,12 @@
 
 .answer-ok {
   color: var(--ok);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .answer-bad {
   color: var(--bad);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .option-you-picked {
@@ -68,11 +68,11 @@
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
   font-size: 0.65rem;
-  font-weight: 700;
+  font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   background: var(--black);
-  color: var(--white);
+  color: var(--btn-fg);
 }
 
 .results-table tbody tr.clickable {
@@ -81,11 +81,11 @@
 }
 
 .results-table tbody tr.clickable:hover {
-  background: #f4f4f5;
+  background: var(--overlay-soft);
 }
 
 .results-table tbody tr.selected-row {
-  background: #f0f0f2;
+  background: var(--overlay-soft);
   outline: 2px solid var(--black);
   outline-offset: -2px;
 }
@@ -100,14 +100,4 @@
   padding: 1.5rem;
   text-align: center;
   color: var(--muted);
-}
-
-@media (max-width: 768px) {
-  .result-detail-header {
-    flex-direction: column;
-  }
-
-  .result-detail-close {
-    width: 100%;
-  }
 }

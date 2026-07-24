@@ -46,14 +46,22 @@ export function extractOptionNotes(
   return notes;
 }
 
-/** Strip bank prefixes like "Why C:" / "Option B" / leading letter so body reads naturally. */
+/** Strip bank/AI prefixes like "Why C:", "Why D is wrong:", "Option B" so body reads naturally. */
 export function cleanExplanationBody(letter: string, raw: string): string {
   let body = raw.trim().replace(/^[.!?•;:\s]+/, '');
   if (!body) return '';
 
   body = body.replace(/^(Correct|Incorrect)\.\s*/i, '');
-  body = body.replace(new RegExp(`^Why\\s+${letter}\\s*:\\s*`, 'i'), '');
-  body = body.replace(new RegExp(`^Option\\s+${letter}\\s*[:.]?\\s*`, 'i'), '');
+  // Strip letter-bound prefixes for ANY letter (shuffle can leave "Why D is wrong" under option A).
+  for (let i = 0; i < 3; i++) {
+    const next = body
+      .replace(/^Why\s+[A-D](?:\s+is\s+(?:wrong|incorrect|right|correct))?\s*:\s*/i, '')
+      .replace(/^Option\s+[A-D]\s*[:.]?\s*/i, '')
+      .trim();
+    if (next === body) break;
+    body = next;
+  }
+  body = body.replace(/\bWhy\s+[A-D](?:\s+is\s+(?:wrong|incorrect|right|correct))?\s*:\s*/gi, '');
 
   const letterLead = new RegExp(`^${letter}\\s+`, 'i');
   if (letterLead.test(body)) {

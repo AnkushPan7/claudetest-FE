@@ -21,6 +21,7 @@ import {
   getEntryScore,
   isEntryPassed,
 } from './dashboardUtils';
+import { useTheme } from './theme';
 import './Dashboard.css';
 
 type DashboardProps = {
@@ -29,6 +30,8 @@ type DashboardProps = {
   history: ResultHistoryEntry[];
   meta: ExamMetadata | null;
   onStartPractice: () => void;
+  activeExamLabel?: string | null;
+  onResumeExam?: () => void;
 };
 
 function formatHistoryDate(iso: string): string {
@@ -69,7 +72,18 @@ export default function Dashboard({
   history,
   meta,
   onStartPractice,
+  activeExamLabel,
+  onResumeExam,
 }: DashboardProps) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const chartGrid = isDark ? 'rgba(255,255,255,0.1)' : '#e4e4e7';
+  const chartTick = isDark ? 'rgba(255,255,255,0.55)' : '#71717a';
+  const chartFill = isDark ? '#ffffff' : '#0a0a0a';
+  const chartEmpty = isDark ? 'rgba(255,255,255,0.18)' : '#e4e4e7';
+  const chartAccent = isDark ? '#4ade80' : '#15803d';
+  const chartDotStroke = isDark ? '#0a0a0a' : '#ffffff';
+
   const stats = buildDashboardStats(history, meta);
   const dailyProgress = buildDailyProgress(history, 14);
   const scoreTrend = buildScoreTrend(history);
@@ -86,10 +100,22 @@ export default function Dashboard({
             Track every practice session, spot daily momentum, and see how close you are to the{' '}
             {passTarget} pass target.
           </p>
+          {activeExamLabel && <p className="muted dashboard-resume-hint">{activeExamLabel}</p>}
         </div>
-        <button type="button" className="btn primary dashboard-cta" onClick={onStartPractice}>
-          Start new exam
-        </button>
+        <div className="dashboard-hero-actions">
+          {activeExamLabel && onResumeExam && (
+            <button type="button" className="btn primary dashboard-cta" onClick={onResumeExam}>
+              Resume your last test
+            </button>
+          )}
+          <button
+            type="button"
+            className={`btn ${activeExamLabel ? '' : 'primary'} dashboard-cta`}
+            onClick={onStartPractice}
+          >
+            Start new exam
+          </button>
+        </div>
       </section>
 
       <div className="dashboard-stats-grid">
@@ -148,16 +174,16 @@ export default function Dashboard({
             <div className="chart-wrap">
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={dailyProgress} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} vertical={false} />
                   <XAxis
                     dataKey="label"
-                    tick={{ fontSize: 11, fill: '#71717a' }}
+                    tick={{ fontSize: 11, fill: chartTick }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
                     allowDecimals={false}
-                    tick={{ fontSize: 11, fill: '#71717a' }}
+                    tick={{ fontSize: 11, fill: chartTick }}
                     axisLine={false}
                     tickLine={false}
                   />
@@ -166,7 +192,7 @@ export default function Dashboard({
                     {dailyProgress.map((day) => (
                       <Cell
                         key={day.date}
-                        fill={day.exams > 0 ? '#0a0a0a' : '#e4e4e7'}
+                        fill={day.exams > 0 ? chartFill : chartEmpty}
                       />
                     ))}
                   </Bar>
@@ -191,16 +217,16 @@ export default function Dashboard({
             <div className="chart-wrap">
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={scoreTrend} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} vertical={false} />
                   <XAxis
                     dataKey="label"
-                    tick={{ fontSize: 11, fill: '#71717a' }}
+                    tick={{ fontSize: 11, fill: chartTick }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
                     domain={['dataMin - 50', 'dataMax + 50']}
-                    tick={{ fontSize: 11, fill: '#71717a' }}
+                    tick={{ fontSize: 11, fill: chartTick }}
                     axisLine={false}
                     tickLine={false}
                   />
@@ -208,9 +234,9 @@ export default function Dashboard({
                   <Line
                     type="monotone"
                     dataKey="score"
-                    stroke="#0a0a0a"
+                    stroke={chartFill}
                     strokeWidth={3}
-                    dot={{ r: 5, fill: '#0a0a0a', strokeWidth: 2, stroke: '#fff' }}
+                    dot={{ r: 5, fill: chartFill, strokeWidth: 2, stroke: chartDotStroke }}
                     activeDot={{ r: 7 }}
                   />
                 </LineChart>
@@ -236,20 +262,20 @@ export default function Dashboard({
                 <AreaChart data={dailyProgress} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                   <defs>
                     <linearGradient id="accuracyGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#166534" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#166534" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor={chartAccent} stopOpacity={0.45} />
+                      <stop offset="100%" stopColor={chartAccent} stopOpacity={0.05} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartGrid} vertical={false} />
                   <XAxis
                     dataKey="label"
-                    tick={{ fontSize: 11, fill: '#71717a' }}
+                    tick={{ fontSize: 11, fill: chartTick }}
                     axisLine={false}
                     tickLine={false}
                   />
                   <YAxis
                     domain={[0, 100]}
-                    tick={{ fontSize: 11, fill: '#71717a' }}
+                    tick={{ fontSize: 11, fill: chartTick }}
                     axisLine={false}
                     tickLine={false}
                   />
@@ -257,7 +283,7 @@ export default function Dashboard({
                   <Area
                     type="monotone"
                     dataKey="accuracy"
-                    stroke="#166534"
+                    stroke={chartAccent}
                     strokeWidth={2}
                     fill="url(#accuracyGradient)"
                     connectNulls={false}
@@ -335,18 +361,14 @@ export default function Dashboard({
                           </span>
                         </td>
                         <td>
-                          {entry.hasDetail ? (
-                            <a
-                              href={`/review/${encodeURIComponent(entry.id)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn secondary dashboard-review-btn"
-                            >
-                              Review
-                            </a>
-                          ) : (
-                            <span className="muted">—</span>
-                          )}
+                          <a
+                            href={`/review/${encodeURIComponent(entry.id)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn secondary dashboard-review-btn"
+                          >
+                            Review
+                          </a>
                         </td>
                       </tr>
                     );

@@ -204,6 +204,213 @@ export async function createSession(
   return res.json();
 }
 
+export async function restoreSession(payload: {
+  sessionId: string;
+  questionIds: number[];
+  sourceMode: string;
+  bankId?: string | null;
+  generationJobId?: string | null;
+  answers?: Record<number, string>;
+}): Promise<SessionDto> {
+  const res = await fetch(`${API}/sessions/restore`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId: payload.sessionId,
+      questionIds: payload.questionIds,
+      sourceMode: payload.sourceMode,
+      bankId: payload.bankId ?? null,
+      generationJobId: payload.generationJobId ?? null,
+      answers: payload.answers ?? null,
+    }),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '');
+    throw new Error(msg || 'Failed to restore practice session');
+  }
+  return res.json();
+}
+
+export type GenerationJobDto = {
+  jobId: string;
+  userEmail: string;
+  status: 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled' | string;
+  requestedCount: number;
+  completedCount: number;
+  error: string | null;
+  sessionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const GENERATION_JOB_KEY = 'cca_ai_generation_job';
+const ACTIVE_EXAM_KEY = 'cca_active_exam';
+
+export type ActiveExamProgress = {
+  email: string;
+  sessionId: string;
+  sourceMode: string;
+  bankId?: string | null;
+  generationJobId?: string | null;
+  currentIndex: number;
+  remainingSeconds: number;
+  totalQuestions: number;
+  questionIds: number[];
+  draftAnswersByIndex: Record<number, string>;
+  answersByIndex: Record<number, string>;
+  updatedAt: string;
+};
+
+export function getStoredGenerationJobId(email: string): string | null {
+  try {
+    const raw = localStorage.getItem(GENERATION_JOB_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { email?: string; jobId?: string };
+    if (
+      parsed.email?.toLowerCase() === email.trim().toLowerCase() &&
+      parsed.jobId
+    ) {
+      return parsed.jobId;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredGenerationJobId(email: string, jobId: string): void {
+  try {
+    localStorage.setItem(
+      GENERATION_JOB_KEY,
+      JSON.stringify({ email: email.trim().toLowerCase(), jobId }),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearStoredGenerationJobId(): void {
+  try {
+    localStorage.removeItem(GENERATION_JOB_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getStoredActiveExam(email: string): ActiveExamProgress | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_EXAM_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ActiveExamProgress;
+    if (
+      parsed.email?.toLowerCase() === email.trim().toLowerCase() &&
+      parsed.sessionId &&
+      Array.isArray(parsed.questionIds) &&
+      parsed.questionIds.length > 0
+    ) {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredActiveExam(progress: ActiveExamProgress): void {
+  try {
+    localStorage.setItem(
+      ACTIVE_EXAM_KEY,
+      JSON.stringify({
+        ...progress,
+        email: progress.email.trim().toLowerCase(),
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearStoredActiveExam(): void {
+  try {
+    localStorage.removeItem(ACTIVE_EXAM_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function startGenerationJob(payload: {
+  userEmail: string;
+  count: number;
+  sectionIds?: number[];
+  learningUrl?: string;
+  forceNew?: boolean;
+}): Promise<GenerationJobDto> {
+  const res = await fetch(`${API}/generation-jobs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      userEmail: payload.userEmail.trim(),
+      count: payload.count,
+      sectionIds: payload.sectionIds?.length ? payload.sectionIds : null,
+      learningUrl: payload.learningUrl?.trim() || null,
+      forceNew: payload.forceNew ?? false,
+    }),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '');
+    throw new Error(msg || 'Failed to start AI generation');
+  }
+  return res.json();
+}
+
+export async function fetchGenerationJob(jobId: string): Promise<GenerationJobDto> {
+  const res = await fetch(`${API}/generation-jobs/${encodeURIComponent(jobId)}`);
+  if (!res.ok) throw new Error('Failed to load generation progress');
+  return res.json();
+}
+
+export async function fetchActiveGenerationJob(
+  email: string,
+): Promise<GenerationJobDto | null> {
+  const encoded = encodeURIComponent(email.trim().toLowerCase());
+  const res = await fetch(`${API}/users/${encoded}/generation-jobs/active`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error('Failed to load active generation job');
+  return res.json();
+}
+
+export async function createSessionFromGenerationJob(
+  jobId: string,
+  userEmail: string,
+): Promise<SessionDto> {
+  const res = await fetch(`${API}/generation-jobs/${encodeURIComponent(jobId)}/session`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userEmail: userEmail.trim() }),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '');
+    throw new Error(msg || 'Failed to open exam from generated questions');
+  }
+  return res.json();
+}
+
+export async function cancelGenerationJob(
+  jobId: string,
+  userEmail: string,
+): Promise<void> {
+  const res = await fetch(`${API}/generation-jobs/${encodeURIComponent(jobId)}/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userEmail: userEmail.trim() }),
+  });
+  if (!res.ok) {
+    const msg = await res.text().catch(() => '');
+    throw new Error(msg || 'Failed to cancel generation');
+  }
+}
+
 export async function fetchQuestion(sessionId: string, index: number): Promise<QuestionDto> {
   const res = await fetch(`${API}/sessions/${sessionId}/questions/${index}`);
   if (!res.ok) throw new Error('Failed to load question');

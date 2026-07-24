@@ -5,6 +5,7 @@ import {
   SessionDto,
   SessionSummary,
   createSession,
+  restoreSession,
   fetchMetadata,
   fetchQuestion,
   fetchReview,
@@ -12,6 +13,7 @@ import {
   submitAnswer,
   type AnswerSubmit,
   type ExamMetadata,
+  type ActiveExamProgress,
   getAvailableQuestionCount,
   getSelectedBank,
   getSessionExamTargets,
@@ -19,14 +21,27 @@ import {
   type SessionExamTargets,
   type UserDto,
   type ResultHistoryEntry,
+  type GenerationJobDto,
   registerUser,
   fetchUserHistory,
   saveUserResult,
   getStoredUserEmail,
   setStoredUserEmail,
   clearStoredUserEmail,
+  startGenerationJob,
+  fetchGenerationJob,
+  fetchActiveGenerationJob,
+  createSessionFromGenerationJob,
+  cancelGenerationJob,
+  getStoredGenerationJobId,
+  setStoredGenerationJobId,
+  clearStoredGenerationJobId,
+  getStoredActiveExam,
+  setStoredActiveExam,
+  clearStoredActiveExam,
 } from './api';
 import Dashboard from './Dashboard';
+import { ThemeToggle } from './theme';
 import {
   AnswerComparison,
   OptionExplanation,
@@ -76,21 +91,36 @@ export default function App() {
   const timeUpHandled = useRef(false);
   const feedbackRef = useRef<HTMLDivElement>(null);
   const [answerSubmitting, setAnswerSubmitting] = useState(false);
+  const [generationJob, setGenerationJob] = useState<GenerationJobDto | null>(null);
+  const [generationPolling, setGenerationPolling] = useState(false);
+  const generationPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startingFromJobRef = useRef(false);
+  const [activeExam, setActiveExam] = useState<ActiveExamProgress | null>(null);
+  const examJobIdRef = useRef<string | null>(null);
+  const resumeBootstrappedRef = useRef(false);
+
+  const refreshMetadata = useCallback(async (opts?: { applyDefaults?: boolean }) => {
+    const m = await fetchMetadata();
+    setMeta(m);
+    if (opts?.applyDefaults) {
+      const ai = m.questionSource.toLowerCase() === 'ai';
+      setUseAiMode(ai);
+      setSelectedBankId(m.defaultBankId ?? 'ankush');
+      setLearningUrl(m.learningUrl ?? m.learningUrls?.[0] ?? '');
+      const bank = getSelectedBank(m, m.defaultBankId ?? 'ankush');
+      const max = ai ? m.maxQuestionsPerSession : bank.questionCount;
+      setQuestionCount(Math.min(m.totalQuestions, max));
+    } else {
+      setLearningUrl((prev) => prev || m.learningUrl || m.learningUrls?.[0] || '');
+    }
+    return m;
+  }, []);
 
   useEffect(() => {
-    fetchMetadata()
-      .then((m) => {
-        setMeta(m);
-        const ai = m.questionSource.toLowerCase() === 'ai';
-        setUseAiMode(ai);
-        setSelectedBankId(m.defaultBankId ?? 'ankush');
-        setLearningUrl(m.learningUrl ?? m.learningUrls?.[0] ?? '');
-        const bank = getSelectedBank(m, m.defaultBankId ?? 'ankush');
-        const max = ai ? m.maxQuestionsPerSession : bank.questionCount;
-        setQuestionCount(Math.min(m.totalQuestions, max));
-      })
-      .catch(() => setError('Cannot reach API. Start the .NET backend on live.'));
-  }, []);
+    refreshMetadata({ applyDefaults: true }).catch(() =>
+      setError('Cannot reach API. Start the .NET backend on live.'),
+    );
+  }, [refreshMetadata]);
 
   const selectedBank = meta ? getSelectedBank(meta, selectedBankId) : null;
 
@@ -127,9 +157,13 @@ export default function App() {
     }
 
     loadUserHistory(storedEmail)
-      .then(() => setScreen('dashboard'))
+      .then(() => {
+        setActiveExam(getStoredActiveExam(storedEmail));
+        setScreen('dashboard');
+      })
       .catch(() => {
         clearStoredUserEmail();
+        clearStoredActiveExam();
         setScreen('welcome');
       })
       .finally(() => setUserLoading(false));
@@ -153,13 +187,321 @@ export default function App() {
 
   const switchUser = () => {
     clearStoredUserEmail();
+    clearStoredGenerationJobId();
+    clearStoredActiveExam();
     setUser(null);
     setHistory([]);
     setWelcomeName('');
     setWelcomeEmail('');
+    setGenerationJob(null);
+    setActiveExam(null);
+    examJobIdRef.current = null;
+    resumeBootstrappedRef.current = false;
     setScreen('welcome');
     setError(null);
   };
+
+  const stopGenerationPolling = useCallback(() => {
+    if (generationPollRef.current) {
+      clearInterval(generationPollRef.current);
+      generationPollRef.current = null;
+    }
+    setGenerationPolling(false);
+  }, []);
+
+  const hydrateAnswersFromReview = useCallback((items: QuestionReviewItem[]) => {
+    const answers: Record<number, string> = {};
+    const feedback: Record<number, AnswerSubmit> = {};
+    for (const item of items) {
+      if (!item.answered || !item.selectedAnswer) continue;
+      answers[item.index] = item.selectedAnswer;
+      feedback[item.index] = {
+        index: item.index,
+        total: items.length,
+        selectedAnswer: item.selectedAnswer,
+        correctAnswer: item.correctAnswer,
+        isCorrect: item.isCorrect,
+        explanation: item.explanation,
+        wrongAnswerExplanation: item.wrongAnswerExplanation,
+        optionExplanations: item.optionExplanations,
+      };
+    }
+    return { answers, feedback };
+  }, []);
+
+  const openSessionFromDto = useCallback(
+    async (
+      s: SessionDto,
+      currentMeta: ExamMetadata,
+      opts?: {
+        startIndex?: number;
+        remainingSeconds?: number;
+        draftAnswersByIndex?: Record<number, string>;
+        answersByIndex?: Record<number, string>;
+        generationJobId?: string | null;
+        bankId?: string | null;
+        email?: string;
+        hydrateReview?: boolean;
+      },
+    ) => {
+      const startIndex = Math.max(
+        0,
+        Math.min(opts?.startIndex ?? 0, Math.max(0, s.totalQuestions - 1)),
+      );
+
+      let answers = { ...(opts?.answersByIndex ?? {}) };
+      let feedback: Record<number, AnswerSubmit> = {};
+      const drafts = { ...(opts?.draftAnswersByIndex ?? {}) };
+
+      if (opts?.hydrateReview !== false) {
+        try {
+          const rev = await fetchReview(s.sessionId);
+          const hydrated = hydrateAnswersFromReview(rev.questions);
+          answers = { ...answers, ...hydrated.answers };
+          feedback = hydrated.feedback;
+        } catch {
+          /* fresh session or review unavailable */
+        }
+      }
+
+      examJobIdRef.current = opts?.generationJobId ?? examJobIdRef.current;
+      setSession(s);
+      setIndex(startIndex);
+      setSelectedLetter(answers[startIndex] ?? drafts[startIndex] ?? null);
+      setDraftAnswersByIndex(drafts);
+      setAnswersByIndex(answers);
+      setFeedbackByIndex(feedback);
+      setReview([]);
+      const q = await fetchQuestion(s.sessionId, startIndex);
+      setQuestion(q);
+      const targets = getSessionExamTargets(s.totalQuestions, currentMeta);
+      setSessionTargets(targets);
+      const timeLeft =
+        opts?.remainingSeconds != null
+          ? Math.max(0, Math.min(opts.remainingSeconds, targets.timeLimitSeconds))
+          : targets.timeLimitSeconds;
+      setRemainingSeconds(timeLeft);
+      timeUpHandled.current = false;
+      setScreen('quiz');
+
+      const email = opts?.email;
+      if (email) {
+        const progress: ActiveExamProgress = {
+          email,
+          sessionId: s.sessionId,
+          sourceMode: s.sourceMode,
+          bankId: opts?.bankId ?? null,
+          generationJobId: examJobIdRef.current,
+          currentIndex: startIndex,
+          remainingSeconds: timeLeft,
+          totalQuestions: s.totalQuestions,
+          questionIds: [...s.questionIds],
+          draftAnswersByIndex: drafts,
+          answersByIndex: answers,
+          updatedAt: new Date().toISOString(),
+        };
+        setStoredActiveExam(progress);
+        setActiveExam(progress);
+      }
+    },
+    [hydrateAnswersFromReview],
+  );
+
+  const resumeActiveExam = useCallback(
+    async (progress: ActiveExamProgress, currentMeta: ExamMetadata) => {
+      setLoading(true);
+      setError(null);
+      try {
+        examJobIdRef.current = progress.generationJobId ?? null;
+        const s = await restoreSession({
+          sessionId: progress.sessionId,
+          questionIds: progress.questionIds,
+          sourceMode: progress.sourceMode,
+          bankId: progress.bankId,
+          generationJobId: progress.generationJobId,
+          answers: progress.answersByIndex,
+        });
+        await openSessionFromDto(s, currentMeta, {
+          startIndex: progress.currentIndex,
+          remainingSeconds: progress.remainingSeconds,
+          draftAnswersByIndex: progress.draftAnswersByIndex,
+          answersByIndex: progress.answersByIndex,
+          generationJobId: progress.generationJobId,
+          bankId: progress.bankId,
+          email: progress.email,
+          hydrateReview: true,
+        });
+      } catch (err) {
+        clearStoredActiveExam();
+        setActiveExam(null);
+        examJobIdRef.current = null;
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Could not resume your last exam. Start a new one.',
+        );
+        setScreen('home');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [openSessionFromDto],
+  );
+
+  // After login + metadata: park any in-progress exam on the dashboard.
+  // User must click "Resume your last test" (bank and AI) — do not auto-enter quiz on refresh.
+  useEffect(() => {
+    if (!user || !meta || userLoading || resumeBootstrappedRef.current) return;
+    resumeBootstrappedRef.current = true;
+
+    const progress = getStoredActiveExam(user.email);
+    setActiveExam(progress);
+    if (!progress) return;
+
+    if (progress.sourceMode === 'Ai') {
+      setUseAiMode(true);
+    }
+    // Stay on dashboard (set at login) so Resume CTA is visible for both modes.
+  }, [user, meta, userLoading]);
+
+  // Persist live exam progress so refresh can resume.
+  useEffect(() => {
+    if ((screen !== 'quiz' && screen !== 'submit-review') || !session || !user) return;
+
+    const progress: ActiveExamProgress = {
+      email: user.email,
+      sessionId: session.sessionId,
+      sourceMode: session.sourceMode,
+      bankId: session.sourceMode === 'Json' ? selectedBankId : null,
+      generationJobId: examJobIdRef.current,
+      currentIndex: index,
+      remainingSeconds,
+      totalQuestions: session.totalQuestions,
+      questionIds: [...session.questionIds],
+      draftAnswersByIndex,
+      answersByIndex,
+      updatedAt: new Date().toISOString(),
+    };
+    setStoredActiveExam(progress);
+    setActiveExam(progress);
+  }, [
+    screen,
+    session,
+    user,
+    index,
+    remainingSeconds,
+    draftAnswersByIndex,
+    answersByIndex,
+    selectedBankId,
+  ]);
+
+  const openCompletedGenerationJob = useCallback(
+    async (job: GenerationJobDto) => {
+      if (!meta || !user || startingFromJobRef.current) return;
+      startingFromJobRef.current = true;
+      setLoading(true);
+      setError(null);
+      try {
+        const s = await createSessionFromGenerationJob(job.jobId, user.email);
+        clearStoredGenerationJobId();
+        setGenerationJob(null);
+        stopGenerationPolling();
+        examJobIdRef.current = job.jobId;
+        await openSessionFromDto(s, meta, {
+          startIndex: 0,
+          generationJobId: job.jobId,
+          email: user.email,
+          hydrateReview: true,
+        });
+        void refreshMetadata().catch(() => undefined);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to open generated exam.');
+      } finally {
+        startingFromJobRef.current = false;
+        setLoading(false);
+      }
+    },
+    [meta, user, openSessionFromDto, refreshMetadata, stopGenerationPolling],
+  );
+
+  const beginPollingGenerationJob = useCallback(
+    (jobId: string) => {
+      stopGenerationPolling();
+      setGenerationPolling(true);
+
+      const pollOnce = async () => {
+        try {
+          const latest = await fetchGenerationJob(jobId);
+          setGenerationJob(latest);
+
+          if (latest.status === 'Completed') {
+            stopGenerationPolling();
+            await openCompletedGenerationJob(latest);
+            return;
+          }
+
+          if (latest.status === 'Failed' || latest.status === 'Cancelled') {
+            stopGenerationPolling();
+            clearStoredGenerationJobId();
+            setError(latest.error || `Generation ${latest.status.toLowerCase()}.`);
+            setLoading(false);
+          }
+        } catch (err) {
+          stopGenerationPolling();
+          setError(err instanceof Error ? err.message : 'Lost connection to generation progress.');
+          setLoading(false);
+        }
+      };
+
+      void pollOnce();
+      generationPollRef.current = setInterval(() => {
+        void pollOnce();
+      }, 2000);
+    },
+    [openCompletedGenerationJob, stopGenerationPolling],
+  );
+
+  const restoreActiveGenerationJob = useCallback(
+    async (email: string) => {
+      try {
+        const storedId = getStoredGenerationJobId(email);
+        const job =
+          (storedId ? await fetchGenerationJob(storedId).catch(() => null) : null) ??
+          (await fetchActiveGenerationJob(email));
+
+        if (!job) {
+          clearStoredGenerationJobId();
+          setGenerationJob(null);
+          return;
+        }
+
+        setStoredGenerationJobId(email, job.jobId);
+        setGenerationJob(job);
+
+        if (
+          job.status === 'Completed' ||
+          job.status === 'Failed' ||
+          job.status === 'Cancelled'
+        ) {
+          setLoading(false);
+          return;
+        }
+
+        setLoading(true);
+        beginPollingGenerationJob(job.jobId);
+      } catch {
+        /* no active job */
+      }
+    },
+    [beginPollingGenerationJob],
+  );
+
+  useEffect(() => {
+    if (!user || screen !== 'home') return;
+    void restoreActiveGenerationJob(user.email);
+  }, [user, screen, restoreActiveGenerationJob]);
+
+  useEffect(() => () => stopGenerationPolling(), [stopGenerationPolling]);
 
   const toggleSection = (id: number) => {
     setSelectedSections((prev) =>
@@ -167,37 +509,82 @@ export default function App() {
     );
   };
 
-  const startPractice = async () => {
+  const startPractice = async (opts?: { forceNew?: boolean }) => {
     if (!meta) return;
     setLoading(true);
     setError(null);
     try {
+      if (opts?.forceNew) {
+        clearStoredActiveExam();
+        setActiveExam(null);
+        examJobIdRef.current = null;
+      }
+
+      if (useAiMode) {
+        if (!user) {
+          setError('Sign in before generating AI questions so progress can resume after refresh.');
+          setLoading(false);
+          return;
+        }
+
+        const job = await startGenerationJob({
+          userEmail: user.email,
+          count: questionCount,
+          sectionIds: selectedSections.length ? selectedSections : undefined,
+          forceNew: opts?.forceNew ?? true,
+        });
+        setStoredGenerationJobId(user.email, job.jobId);
+        setGenerationJob(job);
+
+        if (job.status === 'Completed') {
+          await openCompletedGenerationJob(job);
+          return;
+        }
+
+        beginPollingGenerationJob(job.jobId);
+        return;
+      }
+
       const s = await createSession(
         questionCount,
         selectedSections.length ? selectedSections : undefined,
-        useAiMode ? 'Ai' : 'Json',
+        'Json',
         undefined,
-        useAiMode ? undefined : selectedBankId,
+        selectedBankId,
       );
-      setSession(s);
-      setIndex(0);
-      setSelectedLetter(null);
-      setDraftAnswersByIndex({});
-      setAnswersByIndex({});
-      setFeedbackByIndex({});
-      setReview([]);
-      const q = await fetchQuestion(s.sessionId, 0);
-      setQuestion(q);
-      const targets = getSessionExamTargets(s.totalQuestions, meta);
-      setSessionTargets(targets);
-      setRemainingSeconds(targets.timeLimitSeconds);
-      timeUpHandled.current = false;
-      setScreen('quiz');
+      examJobIdRef.current = null;
+      await openSessionFromDto(s, meta, {
+        startIndex: 0,
+        bankId: selectedBankId,
+        email: user?.email,
+        hydrateReview: false,
+      });
+      setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start session.');
+      setLoading(false);
+    }
+  };
+
+  const cancelActiveGeneration = async () => {
+    if (!user || !generationJob) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await cancelGenerationJob(generationJob.jobId, user.email);
+      clearStoredGenerationJobId();
+      stopGenerationPolling();
+      setGenerationJob(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel generation.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const openPracticeSetup = () => {
+    setScreen('home');
+    void refreshMetadata().catch(() => undefined);
   };
 
   const selectAnswer = (letter: string) => {
@@ -274,6 +661,9 @@ export default function App() {
       }
       setSummary(sum);
       setReview(sortedReview);
+      clearStoredActiveExam();
+      setActiveExam(null);
+      examJobIdRef.current = null;
 
       if (user && meta) {
         const targets = getSessionExamTargets(sum.total, meta);
@@ -363,6 +753,9 @@ export default function App() {
   }, [remainingSeconds, screen, session]);
 
   const restart = () => {
+    clearStoredActiveExam();
+    setActiveExam(null);
+    examJobIdRef.current = null;
     setScreen('dashboard');
     setSession(null);
     setQuestion(null);
@@ -426,61 +819,64 @@ export default function App() {
           </div>
         </div>
         <div className="header-end">
-          {showAppNav && (
-            <nav className="app-nav" aria-label="Main navigation">
-              <button
-                type="button"
-                className={`app-nav-btn ${screen === 'dashboard' || screen === 'results' ? 'active' : ''}`}
-                onClick={() => setScreen('dashboard')}
-              >
-                Dashboard
-              </button>
-              <button
-                type="button"
-                className={`app-nav-btn ${screen === 'home' ? 'active' : ''}`}
-                onClick={() => setScreen('home')}
-              >
-                Practice
-              </button>
-            </nav>
-          )}
-          {user && screen !== 'welcome' && (
-            <div className="user-chip">
-              <span className="user-chip-name">{user.name}</span>
-              <span className="user-chip-email muted">{user.email}</span>
-              <button type="button" className="btn-link" onClick={switchUser}>
-                Switch user
-              </button>
-            </div>
-          )}
-          {showExamTimer && session && sessionTargets && (
-            <div className="header-stats">
-              <span
-                className={`mono exam-timer ${remainingSeconds <= 300 ? 'timer-low' : ''}`}
-                title={`Time limit for ${session.totalQuestions} questions`}
-              >
-                {formatRemainingTime(remainingSeconds)} /{' '}
-                {formatRemainingTime(sessionTargets.timeLimitSeconds)}
-              </span>
-              {screen === 'quiz' && (
-                <span className="mono">
-                  Q{index + 1}/{session.totalQuestions}
+          <div className="header-toolbar">
+            {showAppNav && (
+              <nav className="app-nav" aria-label="Main navigation">
+                <button
+                  type="button"
+                  className={`app-nav-btn ${screen === 'dashboard' || screen === 'results' ? 'active' : ''}`}
+                  onClick={() => setScreen('dashboard')}
+                >
+                  Dashboard
+                </button>
+                <button
+                  type="button"
+                  className={`app-nav-btn ${screen === 'home' ? 'active' : ''}`}
+                  onClick={openPracticeSetup}
+                >
+                  Practice
+                </button>
+              </nav>
+            )}
+            <ThemeToggle />
+            {user && screen !== 'welcome' && (
+              <div className="user-chip">
+                <span className="user-chip-name">{user.name}</span>
+                <span className="user-chip-email muted">{user.email}</span>
+                <button type="button" className="btn-link" onClick={switchUser}>
+                  Switch user
+                </button>
+              </div>
+            )}
+            {showExamTimer && session && sessionTargets && (
+              <div className="header-stats">
+                <span
+                  className={`mono exam-timer ${remainingSeconds <= 300 ? 'timer-low' : ''}`}
+                  title={`Time limit for ${session.totalQuestions} questions`}
+                >
+                  {formatRemainingTime(remainingSeconds)} /{' '}
+                  {formatRemainingTime(sessionTargets.timeLimitSeconds)}
                 </span>
-              )}
-              {screen === 'submit-review' && <span className="muted">Submit review</span>}
+                {screen === 'quiz' && (
+                  <span className="mono">
+                    Q{index + 1}/{session.totalQuestions}
+                  </span>
+                )}
+                {screen === 'submit-review' && <span className="muted">Submit review</span>}
+              </div>
+            )}
+            <div className="header-logos">
+              <img
+                src="/logos/claude.png"
+                alt="Claude Certified Architect"
+                className="header-logo header-logo-claude"
+              />
+              <img
+                src="/logos/appunik.png"
+                alt="AppUnik"
+                className="header-logo header-logo-appunik"
+              />
             </div>
-          )}
-          <div className="header-logos">
-            <img
-              src="/logos/claude.png"
-              alt="Claude Certified Architect"
-              className="header-logo header-logo-claude"
-            />
-            <img
-              src="/logos/appunik.png"
-              alt="AppUnik"
-              className="header-logo header-logo-appunik"
-            />
           </div>
         </div>
       </header>
@@ -547,7 +943,26 @@ export default function App() {
             userEmail={user.email}
             history={history}
             meta={meta}
-            onStartPractice={() => setScreen('home')}
+            onStartPractice={openPracticeSetup}
+            activeExamLabel={
+              activeExam
+                ? `Left off at question ${activeExam.currentIndex + 1} of ${activeExam.totalQuestions}${
+                    activeExam.sourceMode === 'Ai' ? ' (AI test)' : ''
+                  }`
+                : null
+            }
+            onResumeExam={
+              activeExam && meta
+                ? () => {
+                    if (activeExam.sourceMode === 'Ai') {
+                      setUseAiMode(true);
+                      setScreen('home');
+                      return;
+                    }
+                    void resumeActiveExam(activeExam, meta);
+                  }
+                : undefined
+            }
           />
         )}
 
@@ -753,24 +1168,158 @@ export default function App() {
                   </p>
                 </fieldset>
 
-                <button
-                  className="btn primary"
-                  onClick={startPractice}
-                  disabled={
-                    loading ||
-                    !meta ||
-                    (useAiMode && !meta.aiGenerationAvailable) ||
-                    (!useAiMode && availableQuestionCount === 0)
-                  }
-                >
-                  {loading
-                    ? useAiMode
-                      ? 'Generating questions with AI…'
-                      : 'Starting…'
-                    : useAiMode
-                      ? 'Generate & start exam'
-                      : 'Start exam'}
-                </button>
+                {activeExam &&
+                  (!useAiMode
+                    ? activeExam.sourceMode !== 'Ai'
+                    : activeExam.sourceMode === 'Ai') && (
+                  <div className="generation-resume banner info">
+                    <p>
+                      You left off at question {activeExam.currentIndex + 1} of{' '}
+                      {activeExam.totalQuestions}
+                      {activeExam.sourceMode === 'Ai' ? ' (AI test)' : ''}.
+                    </p>
+                    <div className="start-exam-actions">
+                      <button
+                        type="button"
+                        className="btn primary"
+                        disabled={loading || !meta}
+                        onClick={() => {
+                          if (!meta) return;
+                          void resumeActiveExam(activeExam, meta);
+                        }}
+                      >
+                        Resume your last test
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={loading || !meta}
+                        onClick={() => void startPractice({ forceNew: true })}
+                      >
+                        {useAiMode ? 'Generate new test' : 'Start new exam'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {useAiMode && generationJob && (
+                  <div className="generation-resume banner info">
+                    <p>
+                      {generationJob.status === 'Completed'
+                        ? `Your ${generationJob.requestedCount} AI questions are ready.`
+                        : generationJob.status === 'Failed'
+                          ? `Generation paused with ${generationJob.completedCount}/${generationJob.requestedCount} questions saved.`
+                          : `Generating for you (${user?.name ?? 'this account'})…`}
+                    </p>
+                    {(generationJob.status === 'Pending' || generationJob.status === 'Running') && (
+                      <>
+                        <div className="progress generation-progress">
+                          <div
+                            className="progress-bar"
+                            style={{
+                              width: `${Math.min(
+                                100,
+                                Math.round(
+                                  (100 * generationJob.completedCount) /
+                                    Math.max(1, generationJob.requestedCount),
+                                ),
+                              )}%`,
+                            }}
+                          />
+                        </div>
+                        <p className="mono hint">
+                          {generationJob.completedCount}/{generationJob.requestedCount} questions
+                          {generationPolling ? ' · generating in background…' : ''}
+                        </p>
+                      </>
+                    )}
+                    <div className="generation-actions">
+                      {(generationJob.status === 'Pending' ||
+                        generationJob.status === 'Running') && (
+                        <>
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => void cancelActiveGeneration()}
+                            disabled={loading && !generationPolling}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => void startPractice({ forceNew: true })}
+                            disabled={loading && !generationPolling}
+                          >
+                            Start over
+                          </button>
+                        </>
+                      )}
+                      {(generationJob.status === 'Failed' ||
+                        generationJob.status === 'Cancelled') && (
+                        <button
+                          type="button"
+                          className="btn primary"
+                          onClick={() =>
+                            void startPractice({
+                              forceNew: generationJob.status === 'Cancelled',
+                            })
+                          }
+                          disabled={loading}
+                        >
+                          {generationJob.completedCount > 0
+                            ? 'Resume generation'
+                            : 'Retry generation'}
+                        </button>
+                      )}
+                      {generationJob.status === 'Completed' && !activeExam && (
+                        <button
+                          type="button"
+                          className="btn primary"
+                          onClick={() => void openCompletedGenerationJob(generationJob)}
+                          disabled={loading}
+                        >
+                          Open exam
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {!(
+                  activeExam &&
+                  (useAiMode
+                    ? activeExam.sourceMode === 'Ai'
+                    : activeExam.sourceMode !== 'Ai')
+                ) && (
+                <div className="start-exam-actions">
+                  <button
+                    className="btn primary"
+                    onClick={() => void startPractice({ forceNew: true })}
+                    disabled={
+                      loading ||
+                      generationPolling ||
+                      !meta ||
+                      (useAiMode && !meta.aiGenerationAvailable) ||
+                      (!useAiMode && availableQuestionCount === 0) ||
+                      (useAiMode &&
+                        !!generationJob &&
+                        (generationJob.status === 'Pending' ||
+                          generationJob.status === 'Running'))
+                    }
+                  >
+                    {loading || generationPolling
+                      ? useAiMode
+                        ? generationJob
+                          ? `Generating ${generationJob.completedCount}/${generationJob.requestedCount}…`
+                          : 'Starting AI generation…'
+                        : 'Starting…'
+                      : useAiMode
+                        ? 'Generate & start exam'
+                        : 'Start exam'}
+                  </button>
+                </div>
+                )}
               </>
             )}
 

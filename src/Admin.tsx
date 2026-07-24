@@ -9,6 +9,7 @@ import {
   type AdminResultSummary,
   type AdminUserSummary,
 } from './api';
+import { ThemeToggle } from './theme';
 import './Admin.css';
 
 function formatDate(iso: string): string {
@@ -78,6 +79,9 @@ export default function Admin() {
   if (!token) {
     return (
       <div className="admin-page">
+        <div className="admin-theme-bar">
+          <ThemeToggle />
+        </div>
         <div className="admin-login card">
           <h1>Admin sign in</h1>
           <p className="hint">Monitor user exam results across the practice platform.</p>
@@ -123,6 +127,7 @@ export default function Admin() {
           <p className="hint">Signed in as {email}</p>
         </div>
         <div className="admin-header-actions">
+          <ThemeToggle />
           <button type="button" className="btn secondary" onClick={loadDashboard} disabled={loading}>
             Refresh
           </button>
