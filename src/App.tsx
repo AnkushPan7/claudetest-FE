@@ -41,6 +41,7 @@ import {
   clearStoredActiveExam,
 } from './api';
 import Dashboard from './Dashboard';
+import ConnectedDots from './ConnectedDots';
 import { ThemeToggle } from './theme';
 import {
   AnswerComparison,
@@ -809,7 +810,8 @@ export default function App() {
   }, [currentFeedback, index]);
 
   return (
-    <div className="app">
+    <div className={`app${screen === 'welcome' ? ' app-welcome' : ''}`}>
+      {screen === 'welcome' && <ConnectedDots />}
       <header className="header">
         <div className="brand">
           <span className="brand-mark">CCA-F</span>
