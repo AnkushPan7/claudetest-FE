@@ -41,7 +41,7 @@ import {
   clearStoredActiveExam,
 } from './api';
 import Dashboard from './Dashboard';
-import { ThemeToggle } from './theme';
+import { ThemeToggle, useTheme } from './theme';
 import {
   AnswerComparison,
   OptionExplanation,
@@ -60,6 +60,7 @@ function formatRemainingTime(totalSeconds: number): string {
 
 
 export default function App() {
+  const { theme } = useTheme();
   const [screen, setScreen] = useState<Screen>('welcome');
   const [meta, setMeta] = useState<ExamMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -872,7 +873,11 @@ export default function App() {
                 className="header-logo header-logo-claude"
               />
               <img
-                src="/logos/appunik.png"
+                src={
+                  theme === 'dark'
+                    ? '/logos/appunik-transparent.png'
+                    : '/logos/appunik.png'
+                }
                 alt="AppUnik"
                 className="header-logo header-logo-appunik"
               />

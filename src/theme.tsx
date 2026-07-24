@@ -27,9 +27,7 @@ function readStoredTheme(): ThemeMode {
   } catch {
     /* ignore */
   }
-  if (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: light)').matches) {
-    return 'light';
-  }
+  // First visit: always start in dark theme
   return 'dark';
 }
 
