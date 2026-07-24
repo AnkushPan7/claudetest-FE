@@ -41,7 +41,7 @@ import {
   clearStoredActiveExam,
 } from './api';
 import Dashboard from './Dashboard';
-import { ThemeToggle, useTheme } from './theme';
+import { ThemeToggle } from './theme';
 import {
   AnswerComparison,
   OptionExplanation,
@@ -60,7 +60,6 @@ function formatRemainingTime(totalSeconds: number): string {
 
 
 export default function App() {
-  const { theme } = useTheme();
   const [screen, setScreen] = useState<Screen>('welcome');
   const [meta, setMeta] = useState<ExamMetadata | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -873,11 +872,7 @@ export default function App() {
                 className="header-logo header-logo-claude"
               />
               <img
-                src={
-                  theme === 'dark'
-                    ? '/logos/appunik-transparent.png'
-                    : '/logos/appunik.png'
-                }
+                src="/logos/appunik.png"
                 alt="AppUnik"
                 className="header-logo header-logo-appunik"
               />
@@ -1030,10 +1025,7 @@ export default function App() {
                         }}
                       />
                       <span>
-                        <strong>Real exam question bank</strong> —{' '}
-                        {selectedBank?.questionCount ?? meta.bankQuestionCount}{' '}
-                        scenario-based questions from the Claude certification program (same
-                        format as the live exam)
+                        <strong>Question Bank</strong>
                       </span>
                     </label>
                     <label className="checkbox source-option">
@@ -1049,8 +1041,7 @@ export default function App() {
                         disabled={!meta.aiGenerationAvailable}
                       />
                       <span>
-                        <strong>AI from learning URL</strong> — Claude writes new questions each
-                        session
+                        <strong>AI Generated Questions</strong>
                         {!meta.aiGenerationAvailable && (
                           <em className="muted">
                             {' '}
